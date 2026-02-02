@@ -2,16 +2,7 @@ package org.forgerock.openicf.connectors.azureaifoundry.utils;
 
 /**
  * Shared constants for the Azure AI Foundry connector.
- *
- * This class defines:
- * - Connector-level identifiers
- * - Object class names
- * - Attribute names used across ConnectorObject mappings
- *
- * The names and values are intentionally aligned with AwsBedrockConstants
- * so that Ping IGA can normalize Bedrock and Azure agents into the same
- * logical model.
- */
+*/
 public abstract class AzureAIFoundryConstants {
 
     // ---------------------------------------------------------------------
@@ -48,10 +39,14 @@ public abstract class AzureAIFoundryConstants {
     public static final String ATTR_STATUS = "status";
     public static final String ATTR_DESCRIPTION = "description";
     public static final String ATTR_FOUNDATION_MODEL = "foundationModel"; // model / deployment
-    public static final String ATTR_ROLE_ARN = "roleArn";                 // for Azure: “invocation identity” resourceId
+    public static final String ATTR_ROLE_ARN = "roleArn";                 // for Azure: "invocation identity" resourceId
     public static final String ATTR_IDLE_TTL = "idleSessionTtlSeconds";
     public static final String ATTR_CREATED_AT = "createdAt";
     public static final String ATTR_UPDATED_AT = "updatedAt";
+    public static final String ATTR_TEMPERATURE = "temperature";
+    public static final String ATTR_TOP_P = "topP";
+    public static final String ATTR_RESPONSE_FORMAT = "responseFormat";
+    public static final String ATTR_TOOL_RESOURCES_RAW = "toolResourcesRaw";
 
     // Relationship attributes on the Agent
     public static final String ATTR_TOOLS = "tools";                     // list of tool IDs

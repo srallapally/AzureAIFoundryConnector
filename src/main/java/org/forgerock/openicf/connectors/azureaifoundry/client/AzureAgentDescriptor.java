@@ -15,6 +15,10 @@ public class AzureAgentDescriptor {
     private final String raiPolicyName;
     private final List<AgentTool> tools;
     private final Map<String, String> metadata;
+    private final Double temperature;
+    private final Double topP;
+    private final String responseFormat;
+    private final String toolResourcesRaw;
 
     public AzureAgentDescriptor(String id,
                                 String name,
@@ -24,7 +28,11 @@ public class AzureAgentDescriptor {
                                 String instructions,
                                 String raiPolicyName,
                                 List<AgentTool> tools,
-                                Map<String, String> metadata) {
+                                Map<String, String> metadata,
+                                Double temperature,
+                                Double topP,
+                                String responseFormat,
+                                String toolResourcesRaw) {
         this.id = id;
         this.name = name;
         this.description = description;
@@ -34,6 +42,10 @@ public class AzureAgentDescriptor {
         this.raiPolicyName = raiPolicyName;
         this.tools = (tools != null) ? tools : Collections.emptyList();
         this.metadata = (metadata != null) ? metadata : Collections.emptyMap();
+        this.temperature = temperature;
+        this.topP = topP;
+        this.responseFormat = responseFormat;
+        this.toolResourcesRaw = toolResourcesRaw;
     }
 
     public String getId() {
@@ -70,6 +82,22 @@ public class AzureAgentDescriptor {
 
     public Map<String, String> getMetadata() {
         return metadata;
+    }
+
+    public Double getTemperature() {
+        return temperature;
+    }
+
+    public Double getTopP() {
+        return topP;
+    }
+
+    public String getResponseFormat() {
+        return responseFormat;
+    }
+
+    public String getToolResourcesRaw() {
+        return toolResourcesRaw;
     }
 
     public String getVersionOrDefault(String fallback) {

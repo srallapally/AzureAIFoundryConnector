@@ -133,6 +133,15 @@ public class AzureAIFoundryConnector implements
         agentOc.addAttributeInfo(AttributeInfoBuilder.build(
                 AzureAIFoundryConstants.ATTR_GUARDRAIL_RAI_POLICY_NAME,
                 String.class));
+        agentOc.addAttributeInfo(AttributeInfoBuilder.build(
+                AzureAIFoundryConstants.ATTR_TEMPERATURE,
+                Double.class));
+        agentOc.addAttributeInfo(AttributeInfoBuilder.build(
+                AzureAIFoundryConstants.ATTR_TOP_P,
+                Double.class));
+        agentOc.addAttributeInfo(AttributeInfoBuilder.build(
+                AzureAIFoundryConstants.ATTR_RESPONSE_FORMAT,
+                String.class));
         // Normalized list of tool IDs (aligned with Bedrock)
         agentOc.addAttributeInfo(
                 AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_TOOLS)
@@ -148,7 +157,9 @@ public class AzureAIFoundryConnector implements
                 AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_TOOLS_RAW)
                         .setType(String.class)
                         .build());
-
+        agentOc.addAttributeInfo(AttributeInfoBuilder.build(
+                AzureAIFoundryConstants.ATTR_TOOL_RESOURCES_RAW,
+                String.class));
         // Relationship: Agent → Tools
         agentOc.addAttributeInfo(AttributeInfoBuilder.define(
                 AzureAIFoundryConstants.ATTR_AGENT_TOOL_IDS)
