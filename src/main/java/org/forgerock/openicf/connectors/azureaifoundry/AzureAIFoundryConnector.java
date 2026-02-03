@@ -3,7 +3,9 @@ package org.forgerock.openicf.connectors.azureaifoundry;
 import org.forgerock.openicf.connectors.azureaifoundry.operations.AzureAIFoundryCrudService;
 import org.forgerock.openicf.connectors.azureaifoundry.utils.AzureAIFoundryConstants;
 import org.identityconnectors.common.logging.Log;
+import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
 import org.identityconnectors.framework.common.objects.*;
+import org.identityconnectors.framework.common.objects.filter.EqualsFilter;
 import org.identityconnectors.framework.common.objects.filter.Filter;
 import org.identityconnectors.framework.common.objects.filter.FilterTranslator;
 import org.identityconnectors.framework.spi.Configuration;
@@ -162,22 +164,29 @@ public class AzureAIFoundryConnector implements
                 String.class));
         // Relationship: Agent → Tools
         agentOc.addAttributeInfo(AttributeInfoBuilder.define(
-                AzureAIFoundryConstants.ATTR_AGENT_TOOL_IDS)
+                        AzureAIFoundryConstants.ATTR_AGENT_TOOL_IDS)
                 .setType(String.class)
                 .setMultiValued(true)
                 .build());
 
         // Relationship: Agent → KnowledgeBases
         agentOc.addAttributeInfo(AttributeInfoBuilder.define(
-                AzureAIFoundryConstants.ATTR_AGENT_KNOWLEDGE_BASE_IDS)
+                        AzureAIFoundryConstants.ATTR_AGENT_KNOWLEDGE_BASE_IDS)
                 .setType(String.class)
                 .setMultiValued(true)
                 .build());
 
         // Relationship: Agent → Guardrail (single, but we could mark multi-valued if you prefer)
         agentOc.addAttributeInfo(AttributeInfoBuilder.define(
-                AzureAIFoundryConstants.ATTR_AGENT_GUARDRAIL_ID)
+                        AzureAIFoundryConstants.ATTR_AGENT_GUARDRAIL_ID)
                 .setType(String.class)
+                .build());
+
+        // Relationship: Agent → Connected Agents (via connected_agent tools)
+        agentOc.addAttributeInfo(AttributeInfoBuilder.define(
+                        AzureAIFoundryConstants.ATTR_CONNECTED_AGENTS)
+                .setType(String.class)
+                .setMultiValued(true)
                 .build());
 
         builder.defineObjectClass(agentOc.build());
@@ -308,21 +317,187 @@ public class AzureAIFoundryConnector implements
             throw new IllegalStateException("CRUD service is not initialized.");
         }
 
+        if (options != null && options.getPageSize() != null && options.getPageSize() < 0) {
+            throw new InvalidAttributeValueException("Page size should not be less than zero.");
+        }
+
+        LOG.ok("executeQuery called for objectClass {0}, filter {1}", objectClass, filter);
+
+        // Detect GET vs QUERY based on UID filter
+        Uid uid = getUidIfGetOperation(filter);
+
+        // GET-by-UID: no paging, just a single object
+        if (uid != null) {
+            handleGetByUid(objectClass, uid, handler, options);
+            return;
+        }
+
+        // QUERY: apply pageSize and cookie semantics
+        int pageSize = (options != null && options.getPageSize() != null)
+                ? options.getPageSize()
+                : -1;
+
+        int offset = 0;
+        if (options != null && options.getPagedResultsCookie() != null) {
+            try {
+                offset = Integer.parseInt(options.getPagedResultsCookie());
+            } catch (NumberFormatException e) {
+                LOG.warn(e, "Invalid pagedResultsCookie value: {0}", options.getPagedResultsCookie());
+            }
+        }
+
+        PagingResultsHandler pagingHandler = new PagingResultsHandler(handler, offset, pageSize);
+
         String ocName = objectClass.getObjectClassValue();
 
         if (ObjectClass.ALL.equals(objectClass) ||
                 AzureAIFoundryConstants.OC_AGENT.equals(ocName)) {
-            crudService.searchAgents(objectClass, filter, handler, options);
+            crudService.searchAgents(objectClass, filter, pagingHandler, options);
         } else if (AzureAIFoundryConstants.OC_GUARDRAIL.equals(ocName)) {
-            crudService.searchGuardrails(objectClass, filter, handler, options);
+            crudService.searchGuardrails(objectClass, filter, pagingHandler, options);
         } else if (AzureAIFoundryConstants.OC_KNOWLEDGE_BASE.equals(ocName)) {
-            crudService.searchKnowledgeBases(objectClass, filter, handler, options);
+            crudService.searchKnowledgeBases(objectClass, filter, pagingHandler, options);
         } else if (AzureAIFoundryConstants.OC_TOOL.equals(ocName)) {
-            crudService.searchTools(objectClass, filter, handler, options);
+            crudService.searchTools(objectClass, filter, pagingHandler, options);
         } else if (AzureAIFoundryConstants.OC_IDENTITY_BINDING.equals(ocName)) {
-            crudService.searchIdentityBindings(objectClass, filter, handler, options);
+            crudService.searchIdentityBindings(objectClass, filter, pagingHandler, options);
         } else {
             LOG.warn("Unsupported objectClass for executeQuery: {0}", ocName);
         }
+
+        emitSearchResult(handler, pagingHandler, offset);
+    }
+
+    // ---------------------------------------------------------------------
+    // GET-by-UID helper
+    // ---------------------------------------------------------------------
+
+    private void handleGetByUid(ObjectClass objectClass,
+                                Uid uid,
+                                ResultsHandler handler,
+                                OperationOptions options) {
+
+        ConnectorObject co = null;
+        String ocName = objectClass.getObjectClassValue();
+
+        if (AzureAIFoundryConstants.OC_AGENT.equals(ocName)) {
+            co = crudService.getAgent(objectClass, uid, options);
+        } else if (AzureAIFoundryConstants.OC_GUARDRAIL.equals(ocName)) {
+            co = crudService.getGuardrail(objectClass, uid, options);
+        } else if (AzureAIFoundryConstants.OC_KNOWLEDGE_BASE.equals(ocName)) {
+            co = crudService.getKnowledgeBase(objectClass, uid, options);
+        } else if (AzureAIFoundryConstants.OC_TOOL.equals(ocName)) {
+            co = crudService.getTool(objectClass, uid, options);
+        } else {
+            throw new UnsupportedOperationException("Unsupported ObjectClass for GET: " + objectClass);
+        }
+
+        if (co != null) {
+            handler.handle(co);
+        }
+
+        // For GET, emit a SearchResult with no cookie / remaining info
+        if (handler instanceof SearchResultsHandler) {
+            ((SearchResultsHandler) handler).handleResult(new SearchResult(null, -1));
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Helper: detect GET-by-UID pattern
+    // ---------------------------------------------------------------------
+
+    private Uid getUidIfGetOperation(Filter query) {
+        if (query instanceof EqualsFilter) {
+            Attribute attr = ((EqualsFilter) query).getAttribute();
+            if (attr != null && Uid.NAME.equals(attr.getName()) && !attr.getValue().isEmpty()) {
+                Object value = attr.getValue().get(0);
+                if (value instanceof String) {
+                    return new Uid((String) value);
+                }
+            }
+        }
+        return null;
+    }
+
+    // ---------------------------------------------------------------------
+    // Paging helpers
+    // ---------------------------------------------------------------------
+
+    /**
+     * Wrapper handler that applies offset + pageSize semantics on top of the
+     * underlying ResultsHandler while still letting the CRUD service iterate
+     * over all matches (so we know totalCount).
+     */
+    private static final class PagingResultsHandler implements ResultsHandler {
+
+        private final ResultsHandler delegate;
+        private final int offset;
+        private final int pageSize;  // -1 or 0 means "no limit"
+
+        private int seen = 0;
+        private int returned = 0;
+
+        PagingResultsHandler(ResultsHandler delegate, int offset, int pageSize) {
+            this.delegate = delegate;
+            this.offset = Math.max(0, offset);
+            this.pageSize = pageSize;
+        }
+
+        @Override
+        public boolean handle(ConnectorObject obj) {
+            seen++;
+
+            // Skip until we reach the offset
+            if (seen <= offset) {
+                return true;
+            }
+
+            // If we have a pageSize limit and already returned that many, skip
+            if (pageSize > 0 && returned >= pageSize) {
+                // We still return true to let CRUD iterate all and update seen,
+                // but we don't forward to the delegate anymore.
+                return true;
+            }
+
+            boolean cont = delegate.handle(obj);
+            if (cont) {
+                returned++;
+            }
+            return cont;
+        }
+
+        int getSeen() {
+            return seen;
+        }
+
+        int getReturned() {
+            return returned;
+        }
+    }
+
+    /**
+     * Emits a SearchResult with cookie and remaining based on what the
+     * PagingResultsHandler observed.
+     */
+    private void emitSearchResult(ResultsHandler handler,
+                                  PagingResultsHandler pagingHandler,
+                                  int offset) {
+        if (!(handler instanceof SearchResultsHandler)) {
+            return;
+        }
+
+        int totalCount = pagingHandler.getSeen();
+        int returnedCount = pagingHandler.getReturned();
+
+        String cookie = null;
+        if (returnedCount > 0 && totalCount > offset + returnedCount) {
+            cookie = String.valueOf(offset + returnedCount);
+        }
+
+        int remaining = (totalCount < 0 || returnedCount < 0)
+                ? -1
+                : Math.max(0, totalCount - (offset + returnedCount));
+
+        ((SearchResultsHandler) handler).handleResult(new SearchResult(cookie, remaining));
     }
 }

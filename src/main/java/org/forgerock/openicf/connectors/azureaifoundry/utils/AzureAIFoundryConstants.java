@@ -2,7 +2,7 @@ package org.forgerock.openicf.connectors.azureaifoundry.utils;
 
 /**
  * Shared constants for the Azure AI Foundry connector.
-*/
+ */
 public abstract class AzureAIFoundryConstants {
 
     // ---------------------------------------------------------------------
@@ -107,6 +107,12 @@ public abstract class AzureAIFoundryConstants {
      * Azure AI Foundry currently supports at most one guardrail per agent.
      */
     public static final String ATTR_AGENT_GUARDRAIL_ID = "guardrailId";
+
+    /**
+     * Multi-valued list of agent IDs connected to this agent via connected_agent tools.
+     * Extracted from tools[] where type == "connected_agent".
+     */
+    public static final String ATTR_CONNECTED_AGENTS = "connectedAgents";
 
     private AzureAIFoundryConstants() {
         // prevent instantiation

@@ -19,6 +19,7 @@ public class AzureAgentDescriptor {
     private final Double topP;
     private final String responseFormat;
     private final String toolResourcesRaw;
+    private final List<String> connectedAgentIds;
 
     public AzureAgentDescriptor(String id,
                                 String name,
@@ -32,7 +33,8 @@ public class AzureAgentDescriptor {
                                 Double temperature,
                                 Double topP,
                                 String responseFormat,
-                                String toolResourcesRaw) {
+                                String toolResourcesRaw,
+                                List<String> connectedAgentIds) {
         this.id = id;
         this.name = name;
         this.description = description;
@@ -46,6 +48,7 @@ public class AzureAgentDescriptor {
         this.topP = topP;
         this.responseFormat = responseFormat;
         this.toolResourcesRaw = toolResourcesRaw;
+        this.connectedAgentIds = (connectedAgentIds != null) ? connectedAgentIds : Collections.emptyList();
     }
 
     public String getId() {
@@ -98,6 +101,10 @@ public class AzureAgentDescriptor {
 
     public String getToolResourcesRaw() {
         return toolResourcesRaw;
+    }
+
+    public List<String> getConnectedAgentIds() {
+        return connectedAgentIds;
     }
 
     public String getVersionOrDefault(String fallback) {

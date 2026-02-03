@@ -702,6 +702,14 @@ public class AzureAIFoundryCrudService {
                     AzureAIFoundryConstants.ATTR_AGENT_TOOL_IDS,
                     toolIds));
         }
+
+        // Connected agents: agent IDs from connected_agent tools
+        if (!agent.getConnectedAgentIds().isEmpty()) {
+            b.addAttribute(AttributeBuilder.build(
+                    AzureAIFoundryConstants.ATTR_CONNECTED_AGENTS,
+                    agent.getConnectedAgentIds()));
+        }
+
         // For now we do not compute:
         //  - ATTR_AGENT_PRINCIPALS
         //

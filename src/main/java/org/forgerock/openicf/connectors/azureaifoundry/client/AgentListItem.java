@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +56,8 @@ public class AgentListItem {
                     temperature,
                     topP,
                     responseFormat != null ? responseFormat.toString() : null,
-                    toolResources != null ? toolResources.toString() : null
+                    toolResources != null ? toolResources.toString() : null,
+                    extractConnectedAgentIds(tools)
             );
         }
 
@@ -91,7 +93,8 @@ public class AgentListItem {
                     null, // temperature not in versioned response
                     null, // topP not in versioned response
                     null, // responseFormat not in versioned response
-                    null  // toolResources not in versioned response
+                    null, // toolResources not in versioned response
+                    extractConnectedAgentIds(toolsFromDef)
             );
         }
 
@@ -109,7 +112,35 @@ public class AgentListItem {
                 null,
                 null,
                 null,
-                null
+                null,
+                Collections.emptyList()
         );
+    }
+
+    /**
+     * Extracts agent IDs from tools where type == "connected_agent".
+     * Each such tool has a "connected_agent" key in its config map
+     * containing a nested map with "id", "name", "description".
+     */
+    @SuppressWarnings("unchecked")
+    private static List<String> extractConnectedAgentIds(List<AgentTool> tools) {
+        if (tools == null || tools.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<String> ids = new ArrayList<>();
+        for (AgentTool tool : tools) {
+            if (!"connected_agent".equals(tool.getType())) {
+                continue;
+            }
+            Object raw = tool.getConfig().get("connected_agent");
+            if (raw instanceof Map) {
+                Object id = ((Map<String, Object>) raw).get("id");
+                if (id instanceof String && !((String) id).isEmpty()) {
+                    ids.add((String) id);
+                }
+            }
+        }
+        return ids;
     }
 }
