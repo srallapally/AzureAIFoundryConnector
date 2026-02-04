@@ -404,13 +404,59 @@ public class AzureAIFoundryCrudService {
     }
 
     /**
-     * Placeholder for identity binding search (Agent ↔ Principal).
+     * Search identity bindings (Agent ↔ Principal).
      */
     public void searchIdentityBindings(ObjectClass objectClass,
                                        Filter query,
                                        ResultsHandler handler,
                                        OperationOptions options) {
-        LOG.ok("searchIdentityBindings is not implemented for AzureAIFoundryCrudService v1.");
+        LOG.ok("searchIdentityBindings called for OC {0}", objectClass);
+
+        if (!AzureAIFoundryConstants.OC_IDENTITY_BINDING.equals(objectClass.getObjectClassValue())) {
+            throw new IllegalArgumentException("Unsupported object class for searchIdentityBindings: " +
+                    objectClass.getObjectClassValue());
+        }
+
+        List<AzureIdentityBindingDescriptor> bindings = client.listAllIdentityBindings();
+        if (bindings == null || bindings.isEmpty()) {
+            LOG.ok("No identity bindings found in tools inventory.");
+            return;
+        }
+
+        // Optional simple filter support: EqualsFilter on __UID__ or __NAME__
+        String matchUid = null;
+        String matchName = null;
+
+        if (query instanceof EqualsFilter) {
+            Attribute attr = ((EqualsFilter) query).getAttribute();
+            if (attr != null && attr.getName() != null && !attr.getValue().isEmpty()) {
+                String val = String.valueOf(attr.getValue().get(0));
+                if (Uid.NAME.equalsIgnoreCase(attr.getName())) {
+                    matchUid = val;
+                } else if (NAME.equalsIgnoreCase(attr.getName())) {
+                    matchName = val;
+                }
+            }
+        }
+
+        for (AzureIdentityBindingDescriptor binding : bindings) {
+            ConnectorObject co = toIdentityBindingConnectorObject(objectClass, binding);
+            if (co == null) {
+                continue;
+            }
+
+            if (matchUid != null && !matchUid.equals(co.getUid().getUidValue())) {
+                continue;
+            }
+            if (matchName != null && !matchName.equals(co.getName().getNameValue())) {
+                continue;
+            }
+
+            if (!handler.handle(co)) {
+                LOG.ok("Handler requested to stop searchIdentityBindings iteration.");
+                break;
+            }
+        }
     }
 
     // =================================================================
@@ -541,6 +587,96 @@ public class AzureAIFoundryCrudService {
     // =================================================================
     // ConnectorObject mapping helpers
     // =================================================================
+
+    private ConnectorObject toIdentityBindingConnectorObject(ObjectClass objectClass,
+                                                             AzureIdentityBindingDescriptor binding) {
+        if (binding == null) {
+            return null;
+        }
+
+        ConnectorObjectBuilder b = new ConnectorObjectBuilder();
+        b.setObjectClass(objectClass);
+
+        // __UID__ - binding ID
+        String id = binding.getId();
+        if (id == null || id.isEmpty()) {
+            return null;
+        }
+        b.setUid(new Uid(id));
+
+        // __NAME__ - human-readable name (agent:principal format)
+        String name = binding.getAgentId() + ":" + binding.getPrincipalId();
+        b.setName(new Name(name));
+
+        // Platform
+        b.addAttribute(AttributeBuilder.build(
+                AzureAIFoundryConstants.ATTR_PLATFORM,
+                "AZURE_AI_FOUNDRY"));
+
+        // Agent reference
+        if (binding.getAgentId() != null) {
+            b.addAttribute(AttributeBuilder.build(
+                    AzureAIFoundryConstants.ATTR_AGENT_ID,
+                    binding.getAgentId()));
+        }
+
+        if (binding.getAgentVersion() != null) {
+            b.addAttribute(AttributeBuilder.build(
+                    AzureAIFoundryConstants.ATTR_AGENT_VERSION,
+                    binding.getAgentVersion()));
+        }
+
+        // Kind (binding type)
+        b.addAttribute(AttributeBuilder.build(
+                AzureAIFoundryConstants.ATTR_KIND,
+                binding.getKind()));
+
+        // Principal info - pack as JSON string
+        if (binding.getPrincipalId() != null) {
+            try {
+                Map<String, String> principalData = new java.util.HashMap<>();
+                principalData.put("principalId", binding.getPrincipalId());
+                if (binding.getPrincipalType() != null) {
+                    principalData.put("principalType", binding.getPrincipalType());
+                }
+                if (binding.getRoleName() != null) {
+                    principalData.put("roleName", binding.getRoleName());
+                }
+                if (binding.getRoleDefinitionId() != null) {
+                    principalData.put("roleDefinitionId", binding.getRoleDefinitionId());
+                }
+
+                String principalJson = OBJECT_MAPPER.writeValueAsString(principalData);
+                b.addAttribute(AttributeBuilder.build(
+                        AzureAIFoundryConstants.ATTR_PRINCIPAL,
+                        principalJson));
+            } catch (JsonProcessingException e) {
+                LOG.warn("Failed to serialize principal for binding {0}: {1}", id, e.getMessage());
+            }
+        }
+
+        // Permissions (multi-valued)
+        if (binding.getPermissions() != null && !binding.getPermissions().isEmpty()) {
+            b.addAttribute(AttributeBuilder.build(
+                    AzureAIFoundryConstants.ATTR_PERMISSIONS,
+                    binding.getPermissions()));
+        }
+
+        // Scope info
+        if (binding.getScope() != null) {
+            b.addAttribute(AttributeBuilder.build(
+                    "scope",
+                    binding.getScope()));
+        }
+
+        if (binding.getScopeResourceId() != null) {
+            b.addAttribute(AttributeBuilder.build(
+                    "scopeResourceId",
+                    binding.getScopeResourceId()));
+        }
+
+        return b.build();
+    }
 
     private ConnectorObject toAgentConnectorObject(ObjectClass objectClass,
                                                    AzureAgentDescriptor agent) {

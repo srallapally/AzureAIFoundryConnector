@@ -42,6 +42,8 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
     private List<AzureKnowledgeBaseDescriptor> cachedKnowledgeBases;
     // Cached guardrail inventory
     private java.util.List<AzureGuardrailDescriptor> cachedGuardrails;
+    // Cached identity bindings inventory
+    private java.util.List<AzureIdentityBindingDescriptor> cachedIdentityBindings;
     // Agent → relationship info (tools, KBs, guardrails) from tools inventory
     private java.util.Map<String, AzureAgentRelations> cachedAgentRelations;
 
@@ -782,6 +784,99 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
         return v.asText();
     }
 
+    private void parseIdentityBindingNode(com.fasterxml.jackson.databind.JsonNode node,
+                                          java.util.List<AzureIdentityBindingDescriptor> out) {
+        String id = optText(node, "id");
+        if (id == null || id.isEmpty()) {
+            return;
+        }
+
+        String agentId = optText(node, "agentId");
+        String agentVersion = optText(node, "agentVersion");
+        String scope = optText(node, "scope");
+        String scopeResourceId = optText(node, "scopeResourceId");
+        String principalId = optText(node, "principalId");
+        String principalType = optText(node, "principalType");
+        String roleDefinitionId = optText(node, "roleDefinitionId");
+        String roleName = optText(node, "roleName");
+
+        java.util.List<String> permissions = new java.util.ArrayList<>();
+        if (node.has("permissions") && node.get("permissions").isArray()) {
+            for (com.fasterxml.jackson.databind.JsonNode p : node.get("permissions")) {
+                if (p.isTextual()) {
+                    permissions.add(p.asText());
+                }
+            }
+        }
+
+        out.add(new AzureIdentityBindingDescriptor(
+                id,
+                agentId,
+                agentVersion,
+                scope,
+                scopeResourceId,
+                principalId,
+                principalType,
+                roleDefinitionId,
+                roleName,
+                permissions
+        ));
+    }
+
+    private java.util.List<AzureIdentityBindingDescriptor> loadIdentityBindingsInventory() {
+        if (cachedIdentityBindings != null) {
+            return cachedIdentityBindings;
+        }
+
+        if ((toolsInventoryUrl == null || toolsInventoryUrl.isEmpty()) &&
+                (toolsInventoryFilePath == null || toolsInventoryFilePath.isEmpty())) {
+            cachedIdentityBindings = java.util.Collections.emptyList();
+            return cachedIdentityBindings;
+        }
+
+        try {
+            String json;
+            if (toolsInventoryUrl != null && !toolsInventoryUrl.isEmpty()) {
+                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                        .uri(java.net.URI.create(toolsInventoryUrl))
+                        .timeout(requestTimeout)
+                        .GET()
+                        .build();
+
+                java.net.http.HttpResponse<String> response = httpClient.send(
+                        request, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() / 100 != 2) {
+                    throw new RuntimeException("Non-2xx response from tools inventory URL: "
+                            + response.statusCode() + " " + response.body());
+                }
+
+                json = response.body();
+            } else {
+                json = new String(
+                        java.nio.file.Files.readAllBytes(
+                                java.nio.file.Paths.get(toolsInventoryFilePath)));
+            }
+
+            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
+            java.util.List<AzureIdentityBindingDescriptor> result = new java.util.ArrayList<>();
+
+            if (root.has("identityBindings") && root.get("identityBindings").isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode node : root.get("identityBindings")) {
+                    parseIdentityBindingNode(node, result);
+                }
+            }
+
+            cachedIdentityBindings = java.util.Collections.unmodifiableList(result);
+            return cachedIdentityBindings;
+        } catch (Exception e) {
+            System.err.println("Failed to load identity bindings inventory: " + e.getMessage());
+            e.printStackTrace();
+            cachedIdentityBindings = java.util.Collections.emptyList();
+            return cachedIdentityBindings;
+        }
+    }
+
     public List<AzureToolDescriptor> listAllTools() {
         return new ArrayList<>(loadToolsInventory().values());
     }
@@ -792,6 +887,27 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
 
     public java.util.List<AzureGuardrailDescriptor> listAllGuardrails() {
         return loadGuardrailsInventory();
+    }
+
+    public java.util.List<AzureIdentityBindingDescriptor> listAllIdentityBindings() {
+        return loadIdentityBindingsInventory();
+    }
+
+    public java.util.List<AzureIdentityBindingDescriptor> listAgentIdentityBindings(String agentId) {
+        if (agentId == null || agentId.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+
+        java.util.List<AzureIdentityBindingDescriptor> allBindings = loadIdentityBindingsInventory();
+        java.util.List<AzureIdentityBindingDescriptor> result = new java.util.ArrayList<>();
+
+        for (AzureIdentityBindingDescriptor binding : allBindings) {
+            if (agentId.equals(binding.getAgentId())) {
+                result.add(binding);
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -879,7 +995,8 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
     }
 
     public List<AzureRoleAssignmentDescriptor> listRoleAssignmentsForScope(String scope) {
-        // TODO: ARM RBAC RoleAssignments API
+        // NOTE: Identity bindings are now loaded from JSON inventory via listAllIdentityBindings()
+        // This method is kept for potential future Azure ARM RBAC API integration
         return Collections.emptyList();
     }
 
