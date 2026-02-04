@@ -58,9 +58,8 @@ public class AzureAIFoundryCrudService {
                              Filter query,
                              ResultsHandler handler,
                              OperationOptions options) {
-        //List<AzureAgentDescriptor> agents = client.listAgents();
         List<AzureAgentDescriptor> agents =
-                                client.listAgents(connection.getAgentBasePath(), connection.getApiVersion());
+                client.listAgents(connection.getAgentBasePath(), connection.getApiVersion());
         for (AzureAgentDescriptor agent : agents) {
             ConnectorObject obj = toAgentConnectorObject(objectClass, agent);
             if (obj == null) {
@@ -87,7 +86,6 @@ public class AzureAIFoundryCrudService {
         java.util.List<AzureGuardrailDescriptor> guardrails = client.listAllGuardrails();
         if (guardrails == null || guardrails.isEmpty()) {
             LOG.ok("No guardrails found in tools inventory.");
-            System.out.println("No guardrails found in tools inventory.");
             return;
         }
 
@@ -261,13 +259,6 @@ public class AzureAIFoundryCrudService {
                 : id;
         b.setName(new Name(name));
 
-        // Owning agent id (from tools inventory)
-        if (tool.getAgentId() != null && !tool.getAgentId().isEmpty()) {
-            b.addAttribute(AttributeBuilder.build(
-                    AzureAIFoundryConstants.ATTR_AGENT_ID,
-                    tool.getAgentId()));
-        }
-
         // Description
         if (tool.getDescription() != null && !tool.getDescription().isEmpty()) {
             b.addAttribute(AttributeBuilder.build(
@@ -435,9 +426,8 @@ public class AzureAIFoundryCrudService {
     public ConnectorObject getAgent(ObjectClass objectClass,
                                     Uid uid,
                                     OperationOptions options) {
-        //AzureAgentDescriptor agent = client.getAgent(uid.getUidValue());
         AzureAgentDescriptor agent =
-                                client.getAgent(uid.getUidValue(), connection.getAgentBasePath(), connection.getApiVersion());
+                client.getAgent(uid.getUidValue(), connection.getAgentBasePath(), connection.getApiVersion());
         if (agent == null) {
             return null;
         }
@@ -648,36 +638,6 @@ public class AzureAIFoundryCrudService {
                 LOG.warn("Failed to serialize tools for agent {0}: {1}", agentId, e.getMessage());
             }
         }
-        // -----------------------------------------------------------------
-        // Normalized tools attribute: list of tool IDs from tools inventory
-        // -----------------------------------------------------------------
-        try {
-            // AzureAgentDescriptor doesn't expose an explicit version yet,
-            // so we use the helper (currently always returns the fallback).
-            String version = agent.getVersionOrDefault("latest");
-
-            List<AzureToolDescriptor> agentTools =
-                    client.listAgentActionGroups(agentId, version);
-/*
-            if (agentTools != null && !agentTools.isEmpty()) {
-                List<String> toolIds = new ArrayList<>();
-                for (AzureToolDescriptor t : agentTools) {
-                    if (t != null && t.getId() != null && !t.getId().isEmpty()) {
-                        toolIds.add(t.getId());
-                    }
-                }
-
-                if (!toolIds.isEmpty()) {
-                    b.addAttribute(AttributeBuilder.build(
-                            AzureAIFoundryConstants.ATTR_TOOLS,
-                            toolIds));
-                }
-            }
-
- */
-        } catch (Exception e) {
-            LOG.warn(e, "Failed to populate tools for agent {0} from tools inventory.", agentId);
-        }
 
         // ------------------------------------------------------------
         // Relationship attributes from tools-inventory.json
@@ -713,11 +673,6 @@ public class AzureAIFoundryCrudService {
                     AzureAIFoundryConstants.ATTR_CONNECTED_AGENTS,
                     agent.getConnectedAgentIds()));
         }
-
-        // For now we do not compute:
-        //  - ATTR_AGENT_PRINCIPALS
-        //
-
 
         return b.build();
     }

@@ -36,8 +36,8 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
     private final String toolsInventoryUrl;
     private final String toolsInventoryFilePath;
 
-    // Cached tools inventory
-    private List<AzureToolDescriptor> cachedToolsInventory;
+    // Cached tools inventory - map by tool ID
+    private Map<String, AzureToolDescriptor> cachedToolsById;
     // Cached knowledge base inventory
     private List<AzureKnowledgeBaseDescriptor> cachedKnowledgeBases;
     // Cached guardrail inventory
@@ -397,16 +397,20 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
     // ---------------------------------------------------------------------
     // Tools / KB / Guardrails / RBAC placeholders
     // ---------------------------------------------------------------------
-    private synchronized List<AzureToolDescriptor> loadToolsInventory() {
-        if (cachedToolsInventory != null) {
-            return cachedToolsInventory;
+    /**
+     * Load tools inventory and store by tool ID.
+     * Tools are parsed from the "tools" array without requiring agentId.
+     */
+    private synchronized Map<String, AzureToolDescriptor> loadToolsInventory() {
+        if (cachedToolsById != null) {
+            return cachedToolsById;
         }
 
         if ((toolsInventoryUrl == null || toolsInventoryUrl.isEmpty()) &&
                 (toolsInventoryFilePath == null || toolsInventoryFilePath.isEmpty())) {
             // Inventory disabled / not configured
-            cachedToolsInventory = Collections.emptyList();
-            return cachedToolsInventory;
+            cachedToolsById = Collections.emptyMap();
+            return cachedToolsById;
         }
 
         try {
@@ -434,29 +438,23 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
             }
 
             com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
-            List<AzureToolDescriptor> result = new ArrayList<>();
+            Map<String, AzureToolDescriptor> result = new HashMap<>();
 
-            if (root.isArray()) {
-                for (com.fasterxml.jackson.databind.JsonNode node : root) {
-                    parseToolNode(node, result);
-                }
-            } else if (root.has("tools") && root.get("tools").isArray()) {
+            if (root.has("tools") && root.get("tools").isArray()) {
                 for (com.fasterxml.jackson.databind.JsonNode node : root.get("tools")) {
                     parseToolNode(node, result);
                 }
-            } else {
-                // Single object case – treat root as one tool record
-                parseToolNode(root, result);
             }
 
-            cachedToolsInventory = Collections.unmodifiableList(result);
-            return cachedToolsInventory;
+            cachedToolsById = Collections.unmodifiableMap(result);
+            return cachedToolsById;
         } catch (Exception e) {
-            // Fail-safe: log to stderr and return empty list. We don't want to
+            // Fail-safe: log to stderr and return empty map. We don't want to
             // break the whole connector if the inventory is malformed/unreachable.
             System.err.println("Failed to load tools inventory: " + e.getMessage());
-            cachedToolsInventory = Collections.emptyList();
-            return cachedToolsInventory;
+            e.printStackTrace();
+            cachedToolsById = Collections.emptyMap();
+            return cachedToolsById;
         }
     }
     private List<AzureKnowledgeBaseDescriptor> loadKnowledgeBasesInventory() {
@@ -640,13 +638,14 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
     }
 
 
+    /**
+     * Parse a tool node from the JSON inventory.
+     * Tools no longer require agentId - the relationship is tracked separately.
+     */
     private void parseToolNode(com.fasterxml.jackson.databind.JsonNode node,
-                               List<AzureToolDescriptor> out) {
+                               Map<String, AzureToolDescriptor> out) {
         String id = optText(node, "id");
-        String agentId = optText(node, "agentId");
-
-        if (id == null || id.isEmpty() || agentId == null || agentId.isEmpty()) {
-            // We require both IDs; skip malformed entries
+        if (id == null || id.isEmpty()) {
             return;
         }
 
@@ -656,15 +655,16 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
         String endpoint = optText(node, "endpoint");
         String definition = optText(node, "definition");
 
-        out.add(new AzureToolDescriptor(
+        AzureToolDescriptor tool = new AzureToolDescriptor(
                 id,
-                agentId,
                 (name != null && !name.isEmpty()) ? name : id,
                 type,
                 description,
                 endpoint,
                 definition
-        ));
+        );
+
+        out.put(id, tool);
     }
     private void parseKnowledgeBaseNode(com.fasterxml.jackson.databind.JsonNode node,
                                         java.util.List<AzureKnowledgeBaseDescriptor> out) {
@@ -783,7 +783,7 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
     }
 
     public List<AzureToolDescriptor> listAllTools() {
-        return loadToolsInventory();
+        return new ArrayList<>(loadToolsInventory().values());
     }
 
     public List<AzureKnowledgeBaseDescriptor> listAllKnowledgeBases() {
@@ -794,16 +794,29 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
         return loadGuardrailsInventory();
     }
 
+    /**
+     * Get tools for a specific agent using the agent relations mapping.
+     */
     public List<AzureToolDescriptor> listAgentActionGroups(String agentId,
                                                            String agentVersion) {
-        List<AzureToolDescriptor> allTools = loadToolsInventory();
-        if (allTools.isEmpty() || agentId == null || agentId.isEmpty()) {
+        if (agentId == null || agentId.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<String, AzureToolDescriptor> toolsById = loadToolsInventory();
+        if (toolsById.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<String> toolIds = getToolIdsForAgent(agentId);
+        if (toolIds.isEmpty()) {
             return Collections.emptyList();
         }
 
         List<AzureToolDescriptor> result = new ArrayList<>();
-        for (AzureToolDescriptor tool : allTools) {
-            if (tool != null && agentId.equals(tool.getAgentId())) {
+        for (String toolId : toolIds) {
+            AzureToolDescriptor tool = toolsById.get(toolId);
+            if (tool != null) {
                 result.add(tool);
             }
         }
@@ -818,31 +831,50 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
             return null;
         }
 
-        // Delegate to listAgentActionGroups; once that method is backed by the
-        // tools inventory, this will automatically return the right descriptor.
-        java.util.List<AzureToolDescriptor> tools = listAgentActionGroups(agentId, agentVersion);
-        if (tools == null || tools.isEmpty()) {
-            return null;
-        }
-
-        for (AzureToolDescriptor tool : tools) {
-            if (tool != null && actionGroupId.equals(tool.getId())) {
-                return tool;
-            }
-        }
-
-        return null;
+        Map<String, AzureToolDescriptor> toolsById = loadToolsInventory();
+        return toolsById.get(actionGroupId);
     }
 
     public List<AzureKnowledgeBaseDescriptor> listAgentKnowledgeBases(String agentId,
                                                                       String agentVersion) {
-        // TODO: derive from file_search / azure_ai_search / memory_search tools.
-        return Collections.emptyList();
+        if (agentId == null || agentId.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<String> kbIds = getKnowledgeBaseIdsForAgent(agentId);
+        if (kbIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Build map of KB descriptors by ID
+        Map<String, AzureKnowledgeBaseDescriptor> kbsById = new HashMap<>();
+        for (AzureKnowledgeBaseDescriptor kb : loadKnowledgeBasesInventory()) {
+            kbsById.put(kb.getId(), kb);
+        }
+
+        // Look up KB descriptors for this agent
+        List<AzureKnowledgeBaseDescriptor> result = new ArrayList<>();
+        for (String kbId : kbIds) {
+            AzureKnowledgeBaseDescriptor kb = kbsById.get(kbId);
+            if (kb != null) {
+                result.add(kb);
+            }
+        }
+        return result;
     }
 
     public AzureGuardrailDescriptor getGuardrail(String guardrailId,
                                                  String guardrailVersion) {
-        // TODO: derive from rai_config or dedicated guardrail APIs if/when used.
+        if (guardrailId == null || guardrailId.isEmpty()) {
+            return null;
+        }
+
+        List<AzureGuardrailDescriptor> guardrails = loadGuardrailsInventory();
+        for (AzureGuardrailDescriptor gr : guardrails) {
+            if (guardrailId.equals(gr.getId())) {
+                return gr;
+            }
+        }
         return null;
     }
 

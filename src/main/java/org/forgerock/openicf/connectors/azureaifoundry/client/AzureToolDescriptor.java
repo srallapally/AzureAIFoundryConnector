@@ -3,7 +3,6 @@ package org.forgerock.openicf.connectors.azureaifoundry.client;
 public class AzureToolDescriptor {
 
     private final String id;
-    private final String agentId;
     private final String name;
     private final String type;
     private final String description;
@@ -11,14 +10,12 @@ public class AzureToolDescriptor {
     private final String definition;
 
     public AzureToolDescriptor(String id,
-                               String agentId,
                                String name,
                                String type,
                                String description,
                                String endpoint,
                                String definition) {
         this.id = id;
-        this.agentId = agentId;
         this.name = name;
         this.type = type;
         this.description = description;
@@ -28,10 +25,6 @@ public class AzureToolDescriptor {
 
     public String getId() {
         return id;
-    }
-
-    public String getAgentId() {
-        return agentId;
     }
 
     public String getName() {
