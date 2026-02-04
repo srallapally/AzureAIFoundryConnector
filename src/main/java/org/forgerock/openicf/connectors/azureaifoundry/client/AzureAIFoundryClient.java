@@ -270,13 +270,23 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
      * GET {endpoint}/agents?api-version=v1&limit={limit}&order=asc&after={last_id}
      */
     public List<AzureAgentDescriptor> listAgents() {
+        return listAgents("/agents", API_VERSION);
+    }
+
+    /**
+     * List agents using an explicitly provided base path and api-version.
+     *
+     * @param agentBasePath "/agents" (classic) or "/assistants" (new)
+     * @param apiVersion    "v1" (or other configured value)
+     */
+    public List<AzureAgentDescriptor> listAgents(String agentBasePath, String apiVersion) {
         List<AzureAgentDescriptor> all = new ArrayList<>();
 
         String continuationToken = null;
         int pageSize = 50; // reasonable default
 
         do {
-            ListAgentsPage page = listAgentsPaginated(pageSize, continuationToken);
+            ListAgentsPage page = listAgentsPaginated(pageSize, continuationToken, agentBasePath, apiVersion);
             all.addAll(page.getAgents());
             continuationToken = page.getContinuationToken();
         } while (continuationToken != null);
@@ -290,10 +300,10 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
      * @param maxResults        per-page limit (limit query parameter)
      * @param continuationToken if non-null, passed as 'after' (last_id from previous page)
      */
-    public ListAgentsPage listAgentsPaginated(int maxResults, String continuationToken) {
+    public ListAgentsPage listAgentsPaginated(int maxResults, String continuationToken, String agentBasePath, String apiVersion) {
 
-        StringBuilder query = new StringBuilder("/agents?api-version=")
-                .append(API_VERSION)
+        StringBuilder query = new StringBuilder(agentBasePath).append("?api-version=")
+                .append(apiVersion)
                 .append("&limit=").append(maxResults)
                 .append("&order=asc");
 
@@ -337,7 +347,16 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
      * GET call later.
      */
     public AzureAgentDescriptor getAgent(String agentId) {
-        return listAgents().stream()
+        return getAgent(agentId, "/agents", API_VERSION);
+    }
+
+    /**
+     * Get an agent from the list result using an explicitly provided base path and api-version.
+     *
+     * This preserves the existing behavior (no per-agent GET call).
+     */
+    public AzureAgentDescriptor getAgent(String agentId, String agentBasePath, String apiVersion) {
+        return listAgents(agentBasePath, apiVersion).stream()
                 .filter(a -> agentId.equals(a.getId()))
                 .findFirst()
                 .orElse(null);
@@ -510,12 +529,14 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
         if ((toolsInventoryUrl == null || toolsInventoryUrl.isEmpty()) &&
                 (toolsInventoryFilePath == null || toolsInventoryFilePath.isEmpty())) {
             cachedGuardrails = java.util.Collections.emptyList();
+            System.out.println("No guardrails inventory configured");
             return cachedGuardrails;
         }
 
         try {
             String json;
             if (toolsInventoryUrl != null && !toolsInventoryUrl.isEmpty()) {
+                System.out.println("Fetching guardrails from " + toolsInventoryUrl);
                 java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                         .uri(java.net.URI.create(toolsInventoryUrl))
                         .timeout(requestTimeout)
@@ -538,6 +559,10 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
             }
 
             com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
+            ObjectMapper mapper = new ObjectMapper();
+            String pretty = mapper.writerWithDefaultPrettyPrinter()
+                    .writeValueAsString(root);
+            System.out.println("Guardrails "+pretty);
             java.util.List<AzureGuardrailDescriptor> result = new java.util.ArrayList<>();
 
             if (root.has("guardrails") && root.get("guardrails").isArray()) {

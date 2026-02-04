@@ -16,6 +16,12 @@ public abstract class AzureAIFoundryConstants {
     // UID separator for composite identifiers (agentId:guardrailId:version, etc.)
     public static final String UID_SEPARATOR = ":";
 
+    public static final String AGENT_API_FLAVOR_CLASSIC = "classic";
+    public static final String AGENT_API_FLAVOR_NEW = "new";
+
+    public static final String AGENTS_BASE_PATH_CLASSIC = "/agents";
+    public static final String AGENTS_BASE_PATH_NEW = "/assistants";
+
     // ---------------------------------------------------------------------
     // Object class names (aligned with AwsBedrockConstants)
     // ---------------------------------------------------------------------

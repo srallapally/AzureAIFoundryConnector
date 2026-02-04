@@ -1,6 +1,7 @@
 package org.forgerock.openicf.connectors.azureaifoundry;
 
 import org.forgerock.openicf.connectors.azureaifoundry.client.AzureAIFoundryClient;
+import org.forgerock.openicf.connectors.azureaifoundry.utils.AzureAIFoundryConstants;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.common.security.GuardedString;
 
@@ -22,6 +23,9 @@ public class AzureAIFoundryConnection implements Closeable {
     private String agentServiceEndpoint;
     private String toolsInventoryUrl;
     private String toolsInventoryFilePath;
+    private String agentBasePath;
+    private String apiVersion;
+    private String flavor;
     /**
      * Create a new connection using the given configuration.
      *
@@ -35,6 +39,14 @@ public class AzureAIFoundryConnection implements Closeable {
         this.agentServiceEndpoint = configuration.getAgentServiceEndpoint();
         this.toolsInventoryUrl = configuration.getToolsInventoryUrl();
         this.toolsInventoryFilePath = configuration.getToolsInventoryFilePath();
+        this.apiVersion = configuration.getApiVersion();
+        this.flavor = configuration.getAgentApiFlavor();
+
+        if (AzureAIFoundryConstants.AGENT_API_FLAVOR_CLASSIC.equals(flavor)) {
+            this.agentBasePath = AzureAIFoundryConstants.AGENTS_BASE_PATH_CLASSIC;
+        } else {
+            this.agentBasePath = AzureAIFoundryConstants.AGENTS_BASE_PATH_NEW;
+        }
 
     }
     private AzureAIFoundryClient createClient(AzureAIFoundryConfiguration config) {
@@ -88,6 +100,14 @@ public class AzureAIFoundryConnection implements Closeable {
         return client;
     }
 
+    public String getAgentBasePath() {
+        return agentBasePath;
+    }
+
+    public String getApiVersion() {
+        return apiVersion;
+    }
+
     /**
      * Expose configuration so other components (e.g., CrudService) can
      * inspect behavior flags (identityBindingScanEnabled, filters, etc.).
@@ -106,7 +126,7 @@ public class AzureAIFoundryConnection implements Closeable {
         LOG.ok("Testing AzureAIFoundryConnection by listing agents...");
         // Let any exceptions propagate; the connector's TestOp will catch
         // and re-wrap as needed.
-        client.listAgents();
+        client.listAgents(agentBasePath, apiVersion);
         LOG.ok("AzureAIFoundryConnection test completed successfully.");
     }
 

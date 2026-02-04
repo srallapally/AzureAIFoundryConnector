@@ -2,6 +2,7 @@ package org.forgerock.openicf.connectors.azureaifoundry;
 
 import org.forgerock.openicf.connectors.azureaifoundry.operations.AzureAIFoundryCrudService;
 import org.forgerock.openicf.connectors.azureaifoundry.utils.AzureAIFoundryConstants;
+import org.identityconnectors.common.CollectionUtil;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
 import org.identityconnectors.framework.common.objects.*;
@@ -150,10 +151,6 @@ public class AzureAIFoundryConnector implements
                         .setType(String.class)
                         .setMultiValued(true)
                         .build());
-        agentOc.addAttributeInfo(AttributeInfoBuilder.define(
-                        AzureAIFoundryConstants.ATTR_GUARDRAIL_ID)
-                .setType(String.class)
-                .build());
         // Raw Azure tools payload as JSON (single large string)
         agentOc.addAttributeInfo(
                 AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_TOOLS_RAW)
@@ -304,7 +301,7 @@ public class AzureAIFoundryConnector implements
 
     @Override
     public FilterTranslator<Filter> createFilterTranslator(ObjectClass objectClass, OperationOptions operationOptions) {
-        return null;
+        return CollectionUtil::newList;
     }
 
     @Override

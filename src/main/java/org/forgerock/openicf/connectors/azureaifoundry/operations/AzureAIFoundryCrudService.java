@@ -58,8 +58,9 @@ public class AzureAIFoundryCrudService {
                              Filter query,
                              ResultsHandler handler,
                              OperationOptions options) {
-        List<AzureAgentDescriptor> agents = client.listAgents();
-
+        //List<AzureAgentDescriptor> agents = client.listAgents();
+        List<AzureAgentDescriptor> agents =
+                                client.listAgents(connection.getAgentBasePath(), connection.getApiVersion());
         for (AzureAgentDescriptor agent : agents) {
             ConnectorObject obj = toAgentConnectorObject(objectClass, agent);
             if (obj == null) {
@@ -86,6 +87,7 @@ public class AzureAIFoundryCrudService {
         java.util.List<AzureGuardrailDescriptor> guardrails = client.listAllGuardrails();
         if (guardrails == null || guardrails.isEmpty()) {
             LOG.ok("No guardrails found in tools inventory.");
+            System.out.println("No guardrails found in tools inventory.");
             return;
         }
 
@@ -433,7 +435,9 @@ public class AzureAIFoundryCrudService {
     public ConnectorObject getAgent(ObjectClass objectClass,
                                     Uid uid,
                                     OperationOptions options) {
-        AzureAgentDescriptor agent = client.getAgent(uid.getUidValue());
+        //AzureAgentDescriptor agent = client.getAgent(uid.getUidValue());
+        AzureAgentDescriptor agent =
+                                client.getAgent(uid.getUidValue(), connection.getAgentBasePath(), connection.getApiVersion());
         if (agent == null) {
             return null;
         }

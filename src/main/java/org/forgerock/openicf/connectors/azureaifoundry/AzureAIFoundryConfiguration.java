@@ -53,6 +53,10 @@ public class AzureAIFoundryConfiguration extends AbstractConfiguration {
      */
     private String defaultLocation = AzureAIFoundryConstants.DEFAULT_LOCATION;
 
+    public static final String ATTR_AGENT_API_FLAVOR = "agentApiFlavor";
+    public static final String ATTR_API_VERSION = "apiVersion";
+    private String agentApiFlavor; // classic | new
+    private String apiVersion;
     // ---------------------------------------------------------------------
     // Authentication / identity configuration
     // ---------------------------------------------------------------------
@@ -299,6 +303,35 @@ public class AzureAIFoundryConfiguration extends AbstractConfiguration {
     public void setToolsInventoryFilePath(String toolsInventoryFilePath) {
         this.toolsInventoryFilePath = toolsInventoryFilePath;
     }
+
+    @ConfigurationProperty(
+            order = 14,
+            displayMessageKey = "agentApiFlavor.display",
+            helpMessageKey = "agentApiFlavor.help",
+            required = false
+    )
+    public String getAgentApiFlavor() {
+        return agentApiFlavor != null ? agentApiFlavor.toLowerCase() : "classic";
+    }
+
+    public void setAgentApiFlavor(String agentApiFlavor) {
+        this.agentApiFlavor = agentApiFlavor;
+    }
+
+    @ConfigurationProperty(
+            order = 15,
+            displayMessageKey = "agentApiVersion.display",
+            helpMessageKey = "agentApiVersion.help",
+            required = false
+    )
+    public String getApiVersion() {
+        return apiVersion != null ? apiVersion : "v1";
+    }
+
+    public void setApiVersion(String apiVersion) {
+        this.apiVersion = apiVersion;
+    }
+
 
     // ---------------------------------------------------------------------
     // Validation
