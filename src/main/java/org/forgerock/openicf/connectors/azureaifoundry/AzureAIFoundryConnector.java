@@ -28,7 +28,7 @@ import org.identityconnectors.framework.spi.operations.TestOp;
  */
 @ConnectorClass(
         configurationClass = AzureAIFoundryConfiguration.class,
-        displayNameKey = "azureAIFoundry.connector.display"
+        displayNameKey = "azureaifoundry.connector.display"
 )
 public class AzureAIFoundryConnector implements
         Connector,
@@ -290,6 +290,57 @@ public class AzureAIFoundryConnector implements
                         .build());
         builder.defineObjectClass(guardrailOc.build());
 
+        // -----------------------------------------------------------------
+        // Identity binding object class (agentIdentityBinding)
+        // -----------------------------------------------------------------
+        ObjectClassInfoBuilder ibOc = new ObjectClassInfoBuilder();
+        ibOc.setType(AzureAIFoundryConstants.OC_IDENTITY_BINDING);
+
+        // Platform
+        ibOc.addAttributeInfo(AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_PLATFORM)
+                .setType(String.class)
+                .setMultiValued(false)
+                .build());
+
+        // Agent reference
+        ibOc.addAttributeInfo(AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_AGENT_ID)
+                .setType(String.class)
+                .setMultiValued(false)
+                .build());
+
+        ibOc.addAttributeInfo(AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_AGENT_VERSION)
+                .setType(String.class)
+                .setMultiValued(false)
+                .build());
+
+        // Binding properties
+        ibOc.addAttributeInfo(AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_KIND)
+                .setType(String.class)
+                .setMultiValued(false)
+                .build());
+
+        ibOc.addAttributeInfo(AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_PRINCIPAL)
+                .setType(String.class)
+                .setMultiValued(false)
+                .build());
+
+        // Permissions (multi-valued)
+        ibOc.addAttributeInfo(AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_PERMISSIONS)
+                        .setType(String.class)
+                        .setMultiValued(true)
+                        .build());
+
+        // Scope attributes
+        ibOc.addAttributeInfo(AttributeInfoBuilder.define("scope")
+                        .setType(String.class)
+                        .setMultiValued(false)
+                        .build());
+        ibOc.addAttributeInfo(AttributeInfoBuilder.define("scopeResourceId")
+                        .setType(String.class)
+                        .setMultiValued(false)
+                        .build());
+
+        builder.defineObjectClass(ibOc.build());
         Schema schema = builder.build();
         LOG.ok("Schema built for AzureAIFoundryConnector.");
         return schema;
