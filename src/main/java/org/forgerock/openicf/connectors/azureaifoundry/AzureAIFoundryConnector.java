@@ -112,7 +112,7 @@ public class AzureAIFoundryConnector implements
         // Agent object class (core AgentInventory equivalent)
         // -----------------------------------------------------------------
         ObjectClassInfoBuilder agentOc = new ObjectClassInfoBuilder();
-        agentOc.setType(AzureAIFoundryConstants.OC_AGENT);
+        agentOc.setType(ObjectClass.ACCOUNT_NAME);
 
         // UID / NAME are implicit: Uid + Name
         agentOc.addAttributeInfo(AttributeInfoBuilder.build(
