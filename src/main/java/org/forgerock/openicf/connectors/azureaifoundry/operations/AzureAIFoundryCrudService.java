@@ -61,6 +61,7 @@ public class AzureAIFoundryCrudService {
         List<AzureAgentDescriptor> agents =
                 client.listAgents(connection.getAgentBasePath(), connection.getApiVersion());
         for (AzureAgentDescriptor agent : agents) {
+            System.out.println(agent.toString());
             ConnectorObject obj = toAgentConnectorObject(objectClass, agent);
             if (obj == null) {
                 continue;

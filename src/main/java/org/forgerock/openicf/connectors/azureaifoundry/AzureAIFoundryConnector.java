@@ -360,6 +360,8 @@ public class AzureAIFoundryConnector implements
                              Filter filter,
                              ResultsHandler handler,
                              OperationOptions options) {
+        LOG.ok("executeQuery called for objectClass {0}, filter {1}", objectClass, filter);
+        System.out.println("executeQuery called for objectClass "+ objectClass +", filter "+ filter);
 
         if (crudService == null) {
             throw new IllegalStateException("CRUD service is not initialized.");
@@ -368,8 +370,6 @@ public class AzureAIFoundryConnector implements
         if (options != null && options.getPageSize() != null && options.getPageSize() < 0) {
             throw new InvalidAttributeValueException("Page size should not be less than zero.");
         }
-
-        LOG.ok("executeQuery called for objectClass {0}, filter {1}", objectClass, filter);
 
         // Detect GET vs QUERY based on UID filter
         Uid uid = getUidIfGetOperation(filter);
@@ -397,9 +397,9 @@ public class AzureAIFoundryConnector implements
         PagingResultsHandler pagingHandler = new PagingResultsHandler(handler, offset, pageSize);
 
         String ocName = objectClass.getObjectClassValue();
-
+        System.out.println("ocName: " + ocName);
         if (ObjectClass.ALL.equals(objectClass) ||
-                AzureAIFoundryConstants.OC_AGENT.equals(ocName)) {
+                objectClass.ACCOUNT_NAME.equals(ocName)) {
             crudService.searchAgents(objectClass, filter, pagingHandler, options);
         } else if (AzureAIFoundryConstants.OC_GUARDRAIL.equals(ocName)) {
             crudService.searchGuardrails(objectClass, filter, pagingHandler, options);
@@ -428,7 +428,7 @@ public class AzureAIFoundryConnector implements
         ConnectorObject co = null;
         String ocName = objectClass.getObjectClassValue();
 
-        if (AzureAIFoundryConstants.OC_AGENT.equals(ocName)) {
+        if (objectClass.ACCOUNT_NAME.equals(ocName)) {
             co = crudService.getAgent(objectClass, uid, options);
         } else if (AzureAIFoundryConstants.OC_GUARDRAIL.equals(ocName)) {
             co = crudService.getGuardrail(objectClass, uid, options);

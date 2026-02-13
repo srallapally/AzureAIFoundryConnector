@@ -286,9 +286,10 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
 
         String continuationToken = null;
         int pageSize = 50; // reasonable default
-
+        System.out.println("Listing agents with pageSize="+pageSize);
         do {
             ListAgentsPage page = listAgentsPaginated(pageSize, continuationToken, agentBasePath, apiVersion);
+            System.out.println("Got page with "+page.getAgents().size()+" agents");
             all.addAll(page.getAgents());
             continuationToken = page.getContinuationToken();
         } while (continuationToken != null);
