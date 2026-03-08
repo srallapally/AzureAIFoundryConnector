@@ -481,6 +481,22 @@ public class AzureAIFoundryCrudService {
         return toAgentConnectorObject(objectClass, agent);
     }
 
+    /**
+     * Delete an agent by UID.
+     */
+    public void deleteAgent(ObjectClass objectClass, Uid uid, OperationOptions options) {
+        if (uid == null || uid.getUidValue() == null || uid.getUidValue().isEmpty()) {
+            throw new IllegalArgumentException("UID must not be null or empty for delete.");
+        }
+
+        String agentId = uid.getUidValue();
+        LOG.ok("Deleting agent {0}", agentId);
+
+        client.deleteAgent(agentId, connection.getAgentBasePath(), connection.getApiVersion());
+
+        LOG.ok("Agent {0} deleted successfully.", agentId);
+    }
+
     public ConnectorObject getGuardrail(ObjectClass objectClass,
                                         Uid uid,
                                         OperationOptions options) {
