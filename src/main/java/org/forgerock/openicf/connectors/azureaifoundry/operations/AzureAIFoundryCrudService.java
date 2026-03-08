@@ -745,7 +745,7 @@ public class AzureAIFoundryCrudService {
 
         if (agent.getInstructions() != null && !agent.getInstructions().isEmpty()) {
             b.addAttribute(AttributeBuilder.build(
-                    "instructions",
+                    AzureAIFoundryConstants.ATTR_INSTRUCTIONS,
                     agent.getInstructions()));
         }
 

@@ -216,6 +216,10 @@ public class AzureAIFoundryConnector implements
                 .setType(String.class)
                 .build());
 
+        agentOc.addAttributeInfo(AttributeInfoBuilder.build(
+                AzureAIFoundryConstants.ATTR_INSTRUCTIONS,
+                String.class));
+
         builder.defineObjectClass(agentOc.build());
 
        /* -----------------------------------------------------------------
