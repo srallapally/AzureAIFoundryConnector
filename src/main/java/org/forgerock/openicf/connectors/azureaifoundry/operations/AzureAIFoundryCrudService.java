@@ -811,6 +811,16 @@ public class AzureAIFoundryCrudService {
                     agent.getConnectedAgentIds()));
         }
 
+        // Entra Agent Identity enrichment (best-effort, gated by config)
+        if (connection.getConfiguration().isEntraAgentIdLookupEnabled()) {
+            String entraObjectId = client.getEntraAgentObjectId(agent.getName());
+            if (entraObjectId != null && !entraObjectId.isEmpty()) {
+                b.addAttribute(AttributeBuilder.build(
+                        AzureAIFoundryConstants.ATTR_ENTRA_AGENT_OBJECT_ID,
+                        entraObjectId));
+            }
+        }
+
         return b.build();
     }
 

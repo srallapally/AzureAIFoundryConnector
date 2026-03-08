@@ -117,6 +117,14 @@ public class AzureAIFoundryConfiguration extends AbstractConfiguration {
      */
     private String agentNameFilterRegex;
 
+    /**
+     * When true, the connector queries Microsoft Graph beta API to resolve
+     * Entra agent identity service principals and correlate them to Foundry
+     * agents by displayName. Requires Application.Read.All permission.
+     * Default: false (opt-in to avoid requiring extra Graph permissions).
+     */
+    private boolean entraAgentIdLookupEnabled = false;
+
     // ---------------------------------------------------------------------
     // Getters / setters with @ConfigurationProperty annotations
     // ---------------------------------------------------------------------
@@ -332,6 +340,19 @@ public class AzureAIFoundryConfiguration extends AbstractConfiguration {
         this.apiVersion = apiVersion;
     }
 
+    @ConfigurationProperty(
+            order = 16,
+            displayMessageKey = "entraAgentIdLookupEnabled.display",
+            helpMessageKey = "entraAgentIdLookupEnabled.help",
+            required = false
+    )
+    public boolean isEntraAgentIdLookupEnabled() {
+        return entraAgentIdLookupEnabled;
+    }
+
+    public void setEntraAgentIdLookupEnabled(boolean entraAgentIdLookupEnabled) {
+        this.entraAgentIdLookupEnabled = entraAgentIdLookupEnabled;
+    }
 
     // ---------------------------------------------------------------------
     // Validation
