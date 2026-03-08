@@ -365,6 +365,36 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
                 .orElse(null);
     }
 
+    /**
+     * Delete an agent by ID.
+     *
+     * @param agentId       the agent/assistant ID to delete
+     * @param agentBasePath "/agents" (classic) or "/assistants" (new)
+     * @param apiVersion    configured API version
+     * @throws RuntimeException on HTTP error or I/O failure
+     */
+    public void deleteAgent(String agentId, String agentBasePath, String apiVersion) {
+        try {
+            String pathAndQuery = agentBasePath + "/" + urlEncode(agentId)
+                    + "?api-version=" + urlEncode(apiVersion);
+
+            HttpRequest request = baseRequestBuilder(pathAndQuery)
+                    .DELETE()
+                    .build();
+
+            HttpResponse<String> response =
+                    httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() / 100 != 2) {
+                throw new RuntimeException(
+                        "Delete agent failed: HTTP " + response.statusCode()
+                        + " body=" + response.body());
+            }
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException("Error deleting agent " + agentId, e);
+        }
+    }
+
     public java.util.List<String> getKnowledgeBaseIdsForAgent(String agentId) {
         if (agentId == null) {
             return java.util.Collections.emptyList();

@@ -15,12 +15,13 @@ import org.identityconnectors.framework.spi.ConnectorClass;
 import org.identityconnectors.framework.spi.SearchResultsHandler;
 import org.identityconnectors.framework.spi.operations.SchemaOp;
 import org.identityconnectors.framework.spi.operations.SearchOp;
+import org.identityconnectors.framework.spi.operations.DeleteOp;
 import org.identityconnectors.framework.spi.operations.TestOp;
 
 /**
  * OpenICF connector for Azure AI Foundry Agents.
  *
- * This connector is read-only for v1 and focuses on discovery of agents.
+ * This connector supports discovery and deletion of agents.
  * It mirrors the structure of the Bedrock connector:
  *  - AzureAIFoundryConfiguration (config)
  *  - AzureAIFoundryConnection   (connection + client lifecycle)
@@ -34,7 +35,8 @@ public class AzureAIFoundryConnector implements
         Connector,
         SearchOp<Filter>,
         SchemaOp,
-        TestOp {
+        TestOp,
+        DeleteOp {
 
     private static final Log LOG = Log.getLog(AzureAIFoundryConnector.class);
 
@@ -96,6 +98,28 @@ public class AzureAIFoundryConnector implements
             throw new IllegalStateException("Connection is not initialized.");
         }
         connection.test();
+    }
+
+    // ---------------------------------------------------------------------
+    // DeleteOp
+    // ---------------------------------------------------------------------
+
+    @Override
+    public void delete(ObjectClass objectClass, Uid uid, OperationOptions options) {
+        LOG.ok("delete called for objectClass={0}, uid={1}", objectClass, uid);
+
+        if (crudService == null) {
+            throw new IllegalStateException("CRUD service is not initialized.");
+        }
+
+        String ocName = objectClass.getObjectClassValue();
+
+        if (ObjectClass.ACCOUNT_NAME.equals(ocName)) {
+            crudService.deleteAgent(objectClass, uid, options);
+        } else {
+            throw new UnsupportedOperationException(
+                    "Delete not supported for object class: " + ocName);
+        }
     }
 
     // ---------------------------------------------------------------------
