@@ -52,6 +52,7 @@ public abstract class AzureAIFoundryConstants {
     public static final String ATTR_TEMPERATURE = "temperature";
     public static final String ATTR_TOP_P = "topP";
     public static final String ATTR_RESPONSE_FORMAT = "responseFormat";
+    public static final String ATTR_INSTRUCTIONS = "instructions";
     public static final String ATTR_TOOL_RESOURCES_RAW = "toolResourcesRaw";
 
     // Relationship attributes on the Agent
