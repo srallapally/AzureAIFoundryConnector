@@ -749,6 +749,28 @@ public class AzureAIFoundryCrudService {
                     createdAtIso));
         }
 
+        // temperature, topP, responseFormat, toolResourcesRaw
+        if (agent.getTemperature() != null) {
+            b.addAttribute(AttributeBuilder.build(
+                    AzureAIFoundryConstants.ATTR_TEMPERATURE,
+                    agent.getTemperature()));
+        }
+        if (agent.getTopP() != null) {
+            b.addAttribute(AttributeBuilder.build(
+                    AzureAIFoundryConstants.ATTR_TOP_P,
+                    agent.getTopP()));
+        }
+        if (agent.getResponseFormat() != null && !agent.getResponseFormat().isEmpty()) {
+            b.addAttribute(AttributeBuilder.build(
+                    AzureAIFoundryConstants.ATTR_RESPONSE_FORMAT,
+                    agent.getResponseFormat()));
+        }
+        if (agent.getToolResourcesRaw() != null && !agent.getToolResourcesRaw().isEmpty()) {
+            b.addAttribute(AttributeBuilder.build(
+                    AzureAIFoundryConstants.ATTR_TOOL_RESOURCES_RAW,
+                    agent.getToolResourcesRaw()));
+        }
+
         // Metadata as flat key/value pairs, prefixed to avoid clashes.
         if (!agent.getMetadata().isEmpty()) {
             for (Map.Entry<String, String> e : agent.getMetadata().entrySet()) {
