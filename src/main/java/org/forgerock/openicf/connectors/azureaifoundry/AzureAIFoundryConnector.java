@@ -210,6 +210,12 @@ public class AzureAIFoundryConnector implements
                 .setMultiValued(true)
                 .build());
 
+        // Entra agent identity object ID (optional, from Graph beta API)
+        agentOc.addAttributeInfo(AttributeInfoBuilder.define(
+                        AzureAIFoundryConstants.ATTR_ENTRA_AGENT_OBJECT_ID)
+                .setType(String.class)
+                .build());
+
         builder.defineObjectClass(agentOc.build());
 
        /* -----------------------------------------------------------------

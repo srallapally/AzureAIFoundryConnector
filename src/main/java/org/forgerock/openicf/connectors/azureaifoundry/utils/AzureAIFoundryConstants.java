@@ -120,6 +120,13 @@ public abstract class AzureAIFoundryConstants {
      */
     public static final String ATTR_CONNECTED_AGENTS = "connectedAgents";
 
+    /**
+     * Entra ID object ID of the agent identity service principal.
+     * Populated via Microsoft Graph beta API when entraAgentIdLookupEnabled is true.
+     * Correlation is best-effort via displayName matching.
+     */
+    public static final String ATTR_ENTRA_AGENT_OBJECT_ID = "entraAgentObjectId";
+
     private AzureAIFoundryConstants() {
         // prevent instantiation
     }

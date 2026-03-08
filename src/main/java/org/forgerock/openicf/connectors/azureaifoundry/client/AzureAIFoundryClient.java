@@ -61,7 +61,15 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
     private volatile Instant cachedTokenExpiresAt; // UTC
 
     private static final String TOKEN_SCOPE = "https://ai.azure.com/.default";
+    private static final String GRAPH_TOKEN_SCOPE = "https://graph.microsoft.com/.default";
     private static final String API_VERSION = "v1";
+
+    // Graph API token cache (separate scope/audience from AI Foundry token)
+    private volatile String cachedGraphToken;
+    private volatile Instant cachedGraphTokenExpiresAt;
+
+    // Agent identity map: displayName -> list of Entra object IDs (null = not loaded yet)
+    private volatile java.util.Map<String, java.util.List<String>> agentIdentityByDisplayName;
 
     // ---------------------------------------------------------------------
     // Constructors
@@ -246,6 +254,178 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
 
     private String urlEncode(String v) {
         return URLEncoder.encode(v, StandardCharsets.UTF_8);
+    }
+
+    // ---------------------------------------------------------------------
+    // Microsoft Graph token acquisition
+    // ---------------------------------------------------------------------
+
+    /**
+     * Acquire a bearer token for Microsoft Graph using client credentials.
+     * Separate cache from the AI Foundry token since the scope differs.
+     */
+    protected synchronized String acquireGraphBearerToken() {
+        if (useManagedIdentity) {
+            throw new IllegalStateException(
+                    "Managed identity auth is not implemented for Graph token.");
+        }
+
+        Instant now = Instant.now();
+        if (cachedGraphToken != null && cachedGraphTokenExpiresAt != null) {
+            if (cachedGraphTokenExpiresAt.isAfter(now.plusSeconds(60))) {
+                return cachedGraphToken;
+            }
+        }
+
+        if (clientId == null || clientSecret == null) {
+            throw new IllegalStateException(
+                    "Client credentials must be configured for Graph token.");
+        }
+
+        try {
+            String tokenEndpoint = "https://login.microsoftonline.com/"
+                    + URLEncoder.encode(tenantId, StandardCharsets.UTF_8)
+                    + "/oauth2/v2.0/token";
+
+            String body = "client_id=" + urlEncode(clientId)
+                    + "&client_secret=" + urlEncode(clientSecret)
+                    + "&grant_type=client_credentials"
+                    + "&scope=" + urlEncode(GRAPH_TOKEN_SCOPE);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(tokenEndpoint))
+                    .timeout(requestTimeout)
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() / 100 != 2) {
+                throw new RuntimeException("Graph token request failed: HTTP "
+                        + response.statusCode() + " body=" + response.body());
+            }
+
+            TokenResponse tokenResponse =
+                    objectMapper.readValue(response.body(), TokenResponse.class);
+
+            if (tokenResponse.access_token == null || tokenResponse.access_token.isEmpty()) {
+                throw new RuntimeException("Graph token response did not contain access_token.");
+            }
+
+            long expiresIn = tokenResponse.expires_in != null ? tokenResponse.expires_in : 3600L;
+            cachedGraphToken = tokenResponse.access_token;
+            cachedGraphTokenExpiresAt = now.plusSeconds(expiresIn);
+
+            return cachedGraphToken;
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException("Error acquiring Graph access token", e);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Entra Agent Identity lookup via Graph beta API
+    // ---------------------------------------------------------------------
+
+    /**
+     * Lazily load all agent identity service principals from Microsoft Graph beta API.
+     * Builds a map of displayName to list of Entra object IDs.
+     *
+     * <p>Uses: GET https://graph.microsoft.com/beta/servicePrincipals/microsoft.graph.agentIdentity
+     *              ?$select=id,displayName
+     *
+     * <p>Best-effort: on any failure, logs a warning and returns an empty map.
+     */
+    private synchronized java.util.Map<String, java.util.List<String>> loadAgentIdentityMap() {
+        if (agentIdentityByDisplayName != null) {
+            return agentIdentityByDisplayName;
+        }
+
+        java.util.Map<String, java.util.List<String>> map = new java.util.HashMap<>();
+
+        try {
+            String graphToken = acquireGraphBearerToken();
+            String url = "https://graph.microsoft.com/beta/servicePrincipals/microsoft.graph.agentIdentity"
+                    + "?$select=id,displayName&$top=999";
+
+            while (url != null) {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .timeout(requestTimeout)
+                        .header("Authorization", "Bearer " + graphToken)
+                        .header("Content-Type", "application/json")
+                        .GET()
+                        .build();
+
+                HttpResponse<String> response = httpClient.send(
+                        request, HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() / 100 != 2) {
+                    System.err.println("Graph agentIdentity list failed: HTTP "
+                            + response.statusCode() + " body=" + response.body());
+                    agentIdentityByDisplayName = java.util.Collections.emptyMap();
+                    return agentIdentityByDisplayName;
+                }
+
+                com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response.body());
+
+                if (root.has("value") && root.get("value").isArray()) {
+                    for (com.fasterxml.jackson.databind.JsonNode node : root.get("value")) {
+                        String displayName = optText(node, "displayName");
+                        String objectId = optText(node, "id");
+                        if (displayName != null && objectId != null) {
+                            map.computeIfAbsent(displayName, k -> new java.util.ArrayList<>()).add(objectId);
+                        }
+                    }
+                }
+
+                // OData pagination
+                com.fasterxml.jackson.databind.JsonNode nextLink = root.get("@odata.nextLink");
+                url = (nextLink != null && !nextLink.isNull()) ? nextLink.asText() : null;
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to load agent identity map from Graph: " + e.getMessage());
+            agentIdentityByDisplayName = java.util.Collections.emptyMap();
+            return agentIdentityByDisplayName;
+        }
+
+        agentIdentityByDisplayName = java.util.Collections.unmodifiableMap(map);
+        return agentIdentityByDisplayName;
+    }
+
+    /**
+     * Look up the Entra object ID for an agent identity by display name.
+     *
+     * <p>Returns the Entra object ID if exactly one agent identity matches
+     * the given display name. Returns null if no match, multiple matches
+     * (ambiguous), or the identity map failed to load.
+     *
+     * <p><b>Note:</b> displayName is the only viable correlation field between
+     * Foundry agents and Entra agent identities. DisplayNames are NOT
+     * guaranteed to be unique. This method is strictly best-effort.
+     *
+     * @param agentDisplayName the Foundry agent name
+     * @return Entra object ID (GUID) or null
+     */
+    public String getEntraAgentObjectId(String agentDisplayName) {
+        if (agentDisplayName == null || agentDisplayName.isEmpty()) {
+            return null;
+        }
+
+        java.util.Map<String, java.util.List<String>> map = loadAgentIdentityMap();
+        java.util.List<String> ids = map.get(agentDisplayName);
+
+        if (ids == null || ids.isEmpty()) {
+            return null;
+        }
+        if (ids.size() > 1) {
+            System.err.println("Ambiguous Entra agent identity match for displayName='"
+                    + agentDisplayName + "': " + ids.size() + " matches found. Skipping.");
+            return null;
+        }
+
+        return ids.get(0);
     }
 
     private HttpRequest.Builder baseRequestBuilder(String pathAndQuery) {
