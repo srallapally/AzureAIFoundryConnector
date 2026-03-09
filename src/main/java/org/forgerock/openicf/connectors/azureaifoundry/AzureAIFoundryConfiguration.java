@@ -370,6 +370,10 @@ public class AzureAIFoundryConfiguration extends AbstractConfiguration {
             throw new IllegalArgumentException(
                     "subscriptionId must be specified for Azure AI Foundry connector.");
         }
+        if (StringUtil.isBlank(agentServiceEndpoint)) {
+            throw new IllegalArgumentException(
+                    "agentServiceEndpoint must be specified for Azure AI Foundry connector.");
+        }
         if (StringUtil.isBlank(defaultLocation)) {
             throw new IllegalArgumentException(
                     "defaultLocation must be specified for Azure AI Foundry connector.");
