@@ -208,13 +208,13 @@ public class AzureAIFoundryCrudService {
 
         if (query instanceof EqualsFilter) {
             Attribute attr = ((EqualsFilter) query).getAttribute();
-            String attrName = attr.getName();
-            String value = AttributeUtil.getAsStringValue(attr);
-
-            if (Uid.NAME.equals(attrName)) {
-                matchUid = value;
-            } else if (Name.NAME.equals(attrName)) {
-                matchName = value;
+            if (attr != null && attr.getName() != null && !attr.getValue().isEmpty()) {
+                String val = String.valueOf(attr.getValue().get(0));
+                if (Uid.NAME.equalsIgnoreCase(attr.getName())) {
+                    matchUid = val;
+                } else if (Name.NAME.equalsIgnoreCase(attr.getName())) {
+                    matchName = val;
+                }
             }
         }
 
