@@ -457,6 +457,9 @@ public class AzureAIFoundryConnector implements
             co = crudService.getKnowledgeBase(objectClass, uid, options);
         } else if (AzureAIFoundryConstants.OC_TOOL.equals(ocName)) {
             co = crudService.getTool(objectClass, uid, options);
+            // #17: Added identity binding GET-by-UID path
+        } else if (AzureAIFoundryConstants.OC_IDENTITY_BINDING.equals(ocName)) {
+            co = crudService.getIdentityBinding(objectClass, uid, options);
         } else {
             throw new UnsupportedOperationException("Unsupported ObjectClass for GET: " + objectClass);
         }

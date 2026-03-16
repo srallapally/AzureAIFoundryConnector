@@ -592,6 +592,42 @@ public class AzureAIFoundryCrudService {
         return null;
     }
 
+    /**
+     * Get a single identity binding by UID.
+     * #17: Added dedicated GET-by-UID path for identity bindings.
+     */
+    public ConnectorObject getIdentityBinding(ObjectClass objectClass,
+                                              Uid uid,
+                                              OperationOptions options) {
+        LOG.ok("getIdentityBinding called for OC {0}, Uid {1}", objectClass, uid);
+
+        if (!AzureAIFoundryConstants.OC_IDENTITY_BINDING.equals(objectClass.getObjectClassValue())) {
+            throw new IllegalArgumentException("Unsupported object class for getIdentityBinding: "
+                    + objectClass.getObjectClassValue());
+        }
+
+        if (uid == null || uid.getUidValue() == null || uid.getUidValue().isEmpty()) {
+            return null;
+        }
+
+        String id = uid.getUidValue();
+
+        List<AzureIdentityBindingDescriptor> bindings = client.listAllIdentityBindings();
+        if (bindings == null || bindings.isEmpty()) {
+            LOG.ok("No identity bindings found in tools inventory; getIdentityBinding returning null.");
+            return null;
+        }
+
+        for (AzureIdentityBindingDescriptor binding : bindings) {
+            if (binding != null && id.equals(binding.getId())) {
+                return toIdentityBindingConnectorObject(objectClass, binding);
+            }
+        }
+
+        LOG.ok("Identity binding with id {0} not found in tools inventory.", id);
+        return null;
+    }
+
 
     // =================================================================
     // Identity binding cache helpers (stubs for future RBAC wiring)
