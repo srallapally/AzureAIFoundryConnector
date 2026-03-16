@@ -231,17 +231,8 @@ public class AzureAIFoundryConnector implements
         toolOc.setType(AzureAIFoundryConstants.OC_TOOL);
 
         // UID / NAME are implicit: Uid + Name
-        // We expose core tool/action-group properties that we know today.
-        // Owning agent
-        toolOc.addAttributeInfo(AttributeInfoBuilder.build(
-                AzureAIFoundryConstants.ATTR_AGENT_ID,
-                String.class));
-        toolOc.addAttributeInfo(AttributeInfoBuilder.build(
-                AzureAIFoundryConstants.ATTR_ACTION_GROUP_ID,
-                String.class));
-        toolOc.addAttributeInfo(AttributeInfoBuilder.build(
-                AzureAIFoundryConstants.ATTR_ACTION_GROUP_NAME,
-                String.class));
+        // #16: Removed agentId, actionGroupId, actionGroupName — not populated;
+        //      tools come from flat inventory, not scoped per-agent.
         // Description
         toolOc.addAttributeInfo(AttributeInfoBuilder.build(
                 AzureAIFoundryConstants.ATTR_DESCRIPTION,
@@ -254,9 +245,7 @@ public class AzureAIFoundryConnector implements
         toolOc.addAttributeInfo(AttributeInfoBuilder.build(
                 AzureAIFoundryConstants.ATTR_ACTION_GROUP_EXECUTOR_ARN,
                 String.class));
-        toolOc.addAttributeInfo(AttributeInfoBuilder.build(
-                AzureAIFoundryConstants.ATTR_ACTION_GROUP_PARENT_SIGNATURE,
-                String.class));
+        // #16: Removed parentActionGroupSignature — not populated; Bedrock carryover.
         toolOc.addAttributeInfo(AttributeInfoBuilder.build(
                 AzureAIFoundryConstants.ATTR_ACTION_GROUP_SCHEMA_URI,
                 String.class));

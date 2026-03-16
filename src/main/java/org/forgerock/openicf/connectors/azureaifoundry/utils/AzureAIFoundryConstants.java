@@ -13,11 +13,7 @@ public abstract class AzureAIFoundryConstants {
     // Default Azure location if none is explicitly configured
     public static final String DEFAULT_LOCATION = "eastus";
 
-    // UID separator for composite identifiers (agentId:guardrailId:version, etc.)
-    public static final String UID_SEPARATOR = ":";
-
     public static final String AGENT_API_FLAVOR_CLASSIC = "classic";
-    public static final String AGENT_API_FLAVOR_NEW = "new";
 
     public static final String AGENTS_BASE_PATH_CLASSIC = "/agents";
     public static final String AGENTS_BASE_PATH_NEW = "/assistants";
@@ -25,7 +21,6 @@ public abstract class AzureAIFoundryConstants {
     // ---------------------------------------------------------------------
     // Object class names (aligned with AwsBedrockConstants)
     // ---------------------------------------------------------------------
-    public static final String OC_AGENT = "agent";
     public static final String OC_GUARDRAIL = "agentGuardrail";
     public static final String OC_TOOL = "agentTool";
     public static final String OC_IDENTITY_BINDING = "agentIdentityBinding";
@@ -41,14 +36,9 @@ public abstract class AzureAIFoundryConstants {
     // ---------------------------------------------------------------------
     // Agent attributes
     // ---------------------------------------------------------------------
-    public static final String ATTR_VERSION = "version";
-    public static final String ATTR_STATUS = "status";
     public static final String ATTR_DESCRIPTION = "description";
     public static final String ATTR_FOUNDATION_MODEL = "foundationModel"; // model / deployment
-    public static final String ATTR_ROLE_ARN = "roleArn";                 // for Azure: "invocation identity" resourceId
-    public static final String ATTR_IDLE_TTL = "idleSessionTtlSeconds";
     public static final String ATTR_CREATED_AT = "createdAt";
-    public static final String ATTR_UPDATED_AT = "updatedAt";
     public static final String ATTR_TEMPERATURE = "temperature";
     public static final String ATTR_TOP_P = "topP";
     public static final String ATTR_RESPONSE_FORMAT = "responseFormat";
@@ -56,10 +46,7 @@ public abstract class AzureAIFoundryConstants {
     public static final String ATTR_TOOL_RESOURCES_RAW = "toolResourcesRaw";
 
     // Relationship attributes on the Agent
-    public static final String ATTR_TOOLS = "tools";                     // list of tool IDs
-    public static final String ATTR_KNOWLEDGE_BASES = "knowledgeBases";  // list of KB IDs
     public static final String ATTR_GUARDRAIL_ID = "guardrailId";
-    public static final String ATTR_GUARDRAIL_VERSION = "guardrailVersion";
 
     // Raw Azure tools payload, serialized as JSON (per-agent)
     public static final String ATTR_TOOLS_RAW = "toolsRaw";
@@ -74,10 +61,9 @@ public abstract class AzureAIFoundryConstants {
     // ---------------------------------------------------------------------
     // Tool (Action Group / API capability) attributes
     // ---------------------------------------------------------------------
-    public static final String ATTR_ACTION_GROUP_ID = "actionGroupId";
-    public static final String ATTR_ACTION_GROUP_NAME = "actionGroupName";
+    // #16: Removed ATTR_ACTION_GROUP_ID, ATTR_ACTION_GROUP_NAME,
+    //      ATTR_ACTION_GROUP_PARENT_SIGNATURE — Bedrock carryovers, not in schema or mapping.
     public static final String ATTR_ACTION_GROUP_EXECUTOR_ARN = "executorArn"; // Azure function / endpoint resourceId
-    public static final String ATTR_ACTION_GROUP_PARENT_SIGNATURE = "parentActionGroupSignature";
     public static final String ATTR_ACTION_GROUP_SCHEMA_URI = "schemaUri";
 
     // ---------------------------------------------------------------------
@@ -86,10 +72,6 @@ public abstract class AzureAIFoundryConstants {
     public static final String ATTR_KIND = "kind";           // DIRECT, GROUP, MANAGED_IDENTITY, etc.
     public static final String ATTR_PRINCIPAL = "principal"; // packed principal descriptor
     public static final String ATTR_PERMISSIONS = "permissions";
-
-    // Virtual, computed principals on the agent (summary of bindings)
-    public static final String ATTR_AGENT_PRINCIPALS = "agentPrincipals";
-    //
 
     // Guardrail object class + attributes
     /** Full rai_policy_name (e.g., /subscriptions/.../raiPolicies/Guardrails608) */
