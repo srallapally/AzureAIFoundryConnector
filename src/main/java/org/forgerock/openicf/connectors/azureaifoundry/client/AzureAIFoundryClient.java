@@ -1,3 +1,4 @@
+// src/main/java/org/forgerock/openicf/connectors/azureaifoundry/client/AzureAIFoundryClient.java
 package org.forgerock.openicf.connectors.azureaifoundry.client;
 
 import org.forgerock.openicf.connectors.azureaifoundry.utils.TokenResponse;
@@ -568,7 +569,7 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
             if (response.statusCode() / 100 != 2) {
                 throw new RuntimeException(
                         "Delete agent failed: HTTP " + response.statusCode()
-                        + " body=" + response.body());
+                                + " body=" + response.body());
             }
         } catch (IOException | InterruptedException e) {
             throw new RuntimeException("Error deleting agent " + agentId, e);
@@ -608,247 +609,156 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
     }
 
     // ---------------------------------------------------------------------
-    // Tools / KB / Guardrails / RBAC placeholders
+    // Tools inventory: single-fetch loader + section accessors
     // ---------------------------------------------------------------------
+
     /**
-     * Load tools inventory and store by tool ID.
-     * Tools are parsed from the "tools" array without requiring agentId.
+     * Fetch the inventory JSON document once and populate all section caches:
+     * tools, knowledge bases, guardrails, agent relations, identity bindings.
+     *
+     * Subsequent calls are no-ops (all caches already set).
      */
-    private synchronized Map<String, AzureToolDescriptor> loadToolsInventory() {
+    private synchronized void loadFullInventory() {
+        // If any cache is already populated, all were set together — skip.
         if (cachedToolsById != null) {
-            return cachedToolsById;
+            return;
         }
 
         if ((toolsInventoryUrl == null || toolsInventoryUrl.isEmpty()) &&
                 (toolsInventoryFilePath == null || toolsInventoryFilePath.isEmpty())) {
-            // Inventory disabled / not configured
             cachedToolsById = Collections.emptyMap();
-            return cachedToolsById;
+            cachedKnowledgeBases = Collections.emptyList();
+            cachedGuardrails = Collections.emptyList();
+            cachedIdentityBindings = Collections.emptyList();
+            cachedAgentRelations = Collections.emptyMap();
+            return;
         }
 
         try {
-            String json;
-            if (toolsInventoryUrl != null && !toolsInventoryUrl.isEmpty()) {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(toolsInventoryUrl))
-                        .GET()
-                        .timeout(requestTimeout)
-                        .build();
-
-                HttpResponse<String> response = httpClient.send(
-                        request, HttpResponse.BodyHandlers.ofString());
-
-                if (response.statusCode() / 100 != 2) {
-                    throw new IOException("Failed to fetch tools inventory from URL " +
-                            toolsInventoryUrl + " status=" + response.statusCode());
-                }
-                json = response.body();
-            } else {
-                // Local file path (for local testing/dev)
-                json = new String(
-                        java.nio.file.Files.readAllBytes(
-                                java.nio.file.Paths.get(toolsInventoryFilePath)));
-            }
-
+            String json = fetchInventoryJson();
             com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
-            Map<String, AzureToolDescriptor> result = new HashMap<>();
 
+            // --- Tools ---
+            Map<String, AzureToolDescriptor> toolsMap = new HashMap<>();
             if (root.has("tools") && root.get("tools").isArray()) {
                 for (com.fasterxml.jackson.databind.JsonNode node : root.get("tools")) {
-                    parseToolNode(node, result);
+                    parseToolNode(node, toolsMap);
                 }
             }
+            cachedToolsById = Collections.unmodifiableMap(toolsMap);
 
-            cachedToolsById = Collections.unmodifiableMap(result);
-            return cachedToolsById;
+            // --- Knowledge bases ---
+            List<AzureKnowledgeBaseDescriptor> kbList = new ArrayList<>();
+            if (root.has("knowledgeBases") && root.get("knowledgeBases").isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode node : root.get("knowledgeBases")) {
+                    parseKnowledgeBaseNode(node, kbList);
+                }
+            }
+            cachedKnowledgeBases = Collections.unmodifiableList(kbList);
+
+            // --- Guardrails ---
+            List<AzureGuardrailDescriptor> grList = new ArrayList<>();
+            if (root.has("guardrails") && root.get("guardrails").isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode node : root.get("guardrails")) {
+                    parseGuardrailNode(node, grList);
+                }
+            }
+            cachedGuardrails = Collections.unmodifiableList(grList);
+
+            // --- Agent relations ---
+            Map<String, AzureAgentRelations> relMap = new HashMap<>();
+            if (root.has("agents") && root.get("agents").isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode node : root.get("agents")) {
+                    parseAgentRelationsNode(node, relMap);
+                }
+            }
+            cachedAgentRelations = Collections.unmodifiableMap(relMap);
+
+            // --- Identity bindings ---
+            List<AzureIdentityBindingDescriptor> ibList = new ArrayList<>();
+            if (root.has("identityBindings") && root.get("identityBindings").isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode node : root.get("identityBindings")) {
+                    parseIdentityBindingNode(node, ibList);
+                }
+            }
+            cachedIdentityBindings = Collections.unmodifiableList(ibList);
+
         } catch (Exception e) {
-            // Fail-safe: log to stderr and return empty map. We don't want to
-            // break the whole connector if the inventory is malformed/unreachable.
             System.err.println("Failed to load tools inventory: " + e.getMessage());
             e.printStackTrace();
             cachedToolsById = Collections.emptyMap();
-            return cachedToolsById;
+            cachedKnowledgeBases = Collections.emptyList();
+            cachedGuardrails = Collections.emptyList();
+            cachedIdentityBindings = Collections.emptyList();
+            cachedAgentRelations = Collections.emptyMap();
         }
     }
+
+    /**
+     * Fetch the raw inventory JSON string from URL or local file.
+     */
+    private String fetchInventoryJson() throws IOException, InterruptedException {
+        if (toolsInventoryUrl != null && !toolsInventoryUrl.isEmpty()) {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(toolsInventoryUrl))
+                    .GET()
+                    .timeout(requestTimeout)
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() / 100 != 2) {
+                throw new IOException("Failed to fetch tools inventory from URL " +
+                        toolsInventoryUrl + " status=" + response.statusCode());
+            }
+            return response.body();
+        }
+
+        return new String(
+                java.nio.file.Files.readAllBytes(
+                        java.nio.file.Paths.get(toolsInventoryFilePath)));
+    }
+
+    private synchronized Map<String, AzureToolDescriptor> loadToolsInventory() {
+        if (cachedToolsById == null) {
+            loadFullInventory();
+        }
+        return cachedToolsById;
+    }
+
     private List<AzureKnowledgeBaseDescriptor> loadKnowledgeBasesInventory() {
-        if (cachedKnowledgeBases != null) {
-            return cachedKnowledgeBases;
+        if (cachedKnowledgeBases == null) {
+            loadFullInventory();
         }
-
-        if ((toolsInventoryUrl == null || toolsInventoryUrl.isEmpty()) &&
-                (toolsInventoryFilePath == null || toolsInventoryFilePath.isEmpty())) {
-            // Inventory disabled / not configured
-            cachedKnowledgeBases = java.util.Collections.emptyList();
-            return cachedKnowledgeBases;
-        }
-
-        try {
-            String json;
-            if (toolsInventoryUrl != null && !toolsInventoryUrl.isEmpty()) {
-                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                        .uri(java.net.URI.create(toolsInventoryUrl))
-                        .timeout(requestTimeout)
-                        .GET()
-                        .build();
-
-                java.net.http.HttpResponse<String> response = httpClient.send(
-                        request, java.net.http.HttpResponse.BodyHandlers.ofString());
-
-                if (response.statusCode() / 100 != 2) {
-                    throw new RuntimeException("Non-2xx response from tools inventory URL: "
-                            + response.statusCode() + " " + response.body());
-                }
-
-                json = response.body();
-            } else {
-                // Local file path (for local testing/dev)
-                json = new String(
-                        java.nio.file.Files.readAllBytes(
-                                java.nio.file.Paths.get(toolsInventoryFilePath)));
-            }
-
-            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
-            java.util.List<AzureKnowledgeBaseDescriptor> result = new java.util.ArrayList<>();
-
-            if (root.has("knowledgeBases") && root.get("knowledgeBases").isArray()) {
-                for (com.fasterxml.jackson.databind.JsonNode node : root.get("knowledgeBases")) {
-                    parseKnowledgeBaseNode(node, result);
-                }
-            } else if (root.isArray()) {
-                // Unlikely for KBs, but be defensive
-                for (com.fasterxml.jackson.databind.JsonNode node : root) {
-                    parseKnowledgeBaseNode(node, result);
-                }
-            } else if (root.has("id") && root.has("serverUrl")) {
-                // Single object case – treat root as one KB record
-                parseKnowledgeBaseNode(root, result);
-            }
-
-            cachedKnowledgeBases = java.util.Collections.unmodifiableList(result);
-            return cachedKnowledgeBases;
-        } catch (Exception e) {
-            System.err.println("Failed to load knowledge base inventory: " + e.getMessage());
-            cachedKnowledgeBases = java.util.Collections.emptyList();
-            return cachedKnowledgeBases;
-        }
+        return cachedKnowledgeBases;
     }
-    private java.util.List<AzureGuardrailDescriptor> loadGuardrailsInventory() {
-        if (cachedGuardrails != null) {
-            return cachedGuardrails;
+
+    private List<AzureGuardrailDescriptor> loadGuardrailsInventory() {
+        if (cachedGuardrails == null) {
+            loadFullInventory();
         }
-
-        if ((toolsInventoryUrl == null || toolsInventoryUrl.isEmpty()) &&
-                (toolsInventoryFilePath == null || toolsInventoryFilePath.isEmpty())) {
-            cachedGuardrails = java.util.Collections.emptyList();
-            System.out.println("No guardrails inventory configured");
-            return cachedGuardrails;
-        }
-
-        try {
-            String json;
-            if (toolsInventoryUrl != null && !toolsInventoryUrl.isEmpty()) {
-                System.out.println("Fetching guardrails from " + toolsInventoryUrl);
-                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                        .uri(java.net.URI.create(toolsInventoryUrl))
-                        .timeout(requestTimeout)
-                        .GET()
-                        .build();
-
-                java.net.http.HttpResponse<String> response = httpClient.send(
-                        request, java.net.http.HttpResponse.BodyHandlers.ofString());
-
-                if (response.statusCode() / 100 != 2) {
-                    throw new RuntimeException("Non-2xx response from tools inventory URL: "
-                            + response.statusCode() + " " + response.body());
-                }
-
-                json = response.body();
-            } else {
-                json = new String(
-                        java.nio.file.Files.readAllBytes(
-                                java.nio.file.Paths.get(toolsInventoryFilePath)));
-            }
-
-            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
-            ObjectMapper mapper = new ObjectMapper();
-            String pretty = mapper.writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(root);
-            System.out.println("Guardrails "+pretty);
-            java.util.List<AzureGuardrailDescriptor> result = new java.util.ArrayList<>();
-
-            if (root.has("guardrails") && root.get("guardrails").isArray()) {
-                for (com.fasterxml.jackson.databind.JsonNode node : root.get("guardrails")) {
-                    parseGuardrailNode(node, result);
-                }
-            } else if (root.isArray()) {
-                for (com.fasterxml.jackson.databind.JsonNode node : root) {
-                    parseGuardrailNode(node, result);
-                }
-            } else if (root.has("id") && root.has("raiPolicyName")) {
-                parseGuardrailNode(root, result);
-            }
-
-            cachedGuardrails = java.util.Collections.unmodifiableList(result);
-            return cachedGuardrails;
-        } catch (Exception e) {
-            System.err.println("Failed to load guardrail inventory: " + e.getMessage());
-            cachedGuardrails = java.util.Collections.emptyList();
-            return cachedGuardrails;
-        }
+        return cachedGuardrails;
     }
-    private java.util.Map<String, AzureAgentRelations> loadAgentRelationsFromInventory() {
-        if (cachedAgentRelations != null) {
-            return cachedAgentRelations;
+
+    private Map<String, AzureAgentRelations> loadAgentRelationsFromInventory() {
+        if (cachedAgentRelations == null) {
+            loadFullInventory();
         }
-
-        java.util.Map<String, AzureAgentRelations> map = new java.util.HashMap<>();
-
-        if ((toolsInventoryUrl == null || toolsInventoryUrl.isEmpty()) &&
-                (toolsInventoryFilePath == null || toolsInventoryFilePath.isEmpty())) {
-            cachedAgentRelations = java.util.Collections.emptyMap();
-            return cachedAgentRelations;
-        }
-
-        try {
-            String json;
-            if (toolsInventoryUrl != null && !toolsInventoryUrl.isEmpty()) {
-                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                        .uri(java.net.URI.create(toolsInventoryUrl))
-                        .timeout(requestTimeout)
-                        .GET()
-                        .build();
-
-                java.net.http.HttpResponse<String> response = httpClient.send(
-                        request, java.net.http.HttpResponse.BodyHandlers.ofString());
-
-                if (response.statusCode() / 100 != 2) {
-                    throw new RuntimeException("Non-2xx response from tools inventory URL: "
-                            + response.statusCode() + " " + response.body());
-                }
-
-                json = response.body();
-            } else {
-                json = new String(
-                        java.nio.file.Files.readAllBytes(
-                                java.nio.file.Paths.get(toolsInventoryFilePath)));
-            }
-
-            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
-
-            if (root.has("agents") && root.get("agents").isArray()) {
-                for (com.fasterxml.jackson.databind.JsonNode node : root.get("agents")) {
-                    parseAgentRelationsNode(node, map);
-                }
-            }
-
-            cachedAgentRelations = java.util.Collections.unmodifiableMap(map);
-            return cachedAgentRelations;
-        } catch (Exception e) {
-            System.err.println("Failed to load agent relations from inventory: " + e.getMessage());
-            cachedAgentRelations = java.util.Collections.emptyMap();
-            return cachedAgentRelations;
-        }
+        return cachedAgentRelations;
     }
+
+    private List<AzureIdentityBindingDescriptor> loadIdentityBindingsInventory() {
+        if (cachedIdentityBindings == null) {
+            loadFullInventory();
+        }
+        return cachedIdentityBindings;
+    }
+
+    // ---------------------------------------------------------------------
+    // Inventory JSON node parsers
+    // ---------------------------------------------------------------------
+
     /**
      * Parse a tool node from the JSON inventory.
      * Handles multiple tool types with different nested structures:
@@ -928,6 +838,7 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
 
         out.put(id, tool);
     }
+
     private void parseKnowledgeBaseNode(com.fasterxml.jackson.databind.JsonNode node,
                                         java.util.List<AzureKnowledgeBaseDescriptor> out) {
         String id = optText(node, "id");
@@ -948,7 +859,7 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
         }
 
         String connectionRef = optText(node, "projectConnectionId");
-        // Inventory doesn’t currently include a KB status; keep it nullable
+        // Inventory doesn't currently include a KB status; keep it nullable
         String status = optText(node, "status");
 
         out.add(new AzureKnowledgeBaseDescriptor(
@@ -959,6 +870,7 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
                 status
         ));
     }
+
     private void parseGuardrailNode(com.fasterxml.jackson.databind.JsonNode node,
                                     java.util.List<AzureGuardrailDescriptor> out) {
         String id = optText(node, "id");
@@ -988,6 +900,7 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
                 def
         ));
     }
+
     private void parseAgentRelationsNode(com.fasterxml.jackson.databind.JsonNode node,
                                          java.util.Map<String, AzureAgentRelations> out) {
         String agentId = optText(node, "agentId");
@@ -1035,15 +948,6 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
         out.put(agentId, new AzureAgentRelations(toolIds, knowledgeBaseIds, guardrailIds));
     }
 
-
-    private String optText(com.fasterxml.jackson.databind.JsonNode node, String field) {
-        com.fasterxml.jackson.databind.JsonNode v = node.get(field);
-        if (v == null || v.isNull()) {
-            return null;
-        }
-        return v.asText();
-    }
-
     private void parseIdentityBindingNode(com.fasterxml.jackson.databind.JsonNode node,
                                           java.util.List<AzureIdentityBindingDescriptor> out) {
         String id = optText(node, "id");
@@ -1083,59 +987,17 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
         ));
     }
 
-    private java.util.List<AzureIdentityBindingDescriptor> loadIdentityBindingsInventory() {
-        if (cachedIdentityBindings != null) {
-            return cachedIdentityBindings;
+    private String optText(com.fasterxml.jackson.databind.JsonNode node, String field) {
+        com.fasterxml.jackson.databind.JsonNode v = node.get(field);
+        if (v == null || v.isNull()) {
+            return null;
         }
-
-        if ((toolsInventoryUrl == null || toolsInventoryUrl.isEmpty()) &&
-                (toolsInventoryFilePath == null || toolsInventoryFilePath.isEmpty())) {
-            cachedIdentityBindings = java.util.Collections.emptyList();
-            return cachedIdentityBindings;
-        }
-
-        try {
-            String json;
-            if (toolsInventoryUrl != null && !toolsInventoryUrl.isEmpty()) {
-                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                        .uri(java.net.URI.create(toolsInventoryUrl))
-                        .timeout(requestTimeout)
-                        .GET()
-                        .build();
-
-                java.net.http.HttpResponse<String> response = httpClient.send(
-                        request, java.net.http.HttpResponse.BodyHandlers.ofString());
-
-                if (response.statusCode() / 100 != 2) {
-                    throw new RuntimeException("Non-2xx response from tools inventory URL: "
-                            + response.statusCode() + " " + response.body());
-                }
-
-                json = response.body();
-            } else {
-                json = new String(
-                        java.nio.file.Files.readAllBytes(
-                                java.nio.file.Paths.get(toolsInventoryFilePath)));
-            }
-
-            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
-            java.util.List<AzureIdentityBindingDescriptor> result = new java.util.ArrayList<>();
-
-            if (root.has("identityBindings") && root.get("identityBindings").isArray()) {
-                for (com.fasterxml.jackson.databind.JsonNode node : root.get("identityBindings")) {
-                    parseIdentityBindingNode(node, result);
-                }
-            }
-
-            cachedIdentityBindings = java.util.Collections.unmodifiableList(result);
-            return cachedIdentityBindings;
-        } catch (Exception e) {
-            System.err.println("Failed to load identity bindings inventory: " + e.getMessage());
-            e.printStackTrace();
-            cachedIdentityBindings = java.util.Collections.emptyList();
-            return cachedIdentityBindings;
-        }
+        return v.asText();
     }
+
+    // ---------------------------------------------------------------------
+    // Public inventory accessors
+    // ---------------------------------------------------------------------
 
     public List<AzureToolDescriptor> listAllTools() {
         return new ArrayList<>(loadToolsInventory().values());

@@ -113,7 +113,7 @@ public abstract class AzureAIFoundryConstants {
      * Single guardrail ID associated with the agent.
      * Azure AI Foundry currently supports at most one guardrail per agent.
      */
-    public static final String ATTR_AGENT_GUARDRAIL_ID = "guardrailId";
+    public static final String ATTR_AGENT_GUARDRAIL_ID = "agentGuardrailId";
 
     /**
      * Multi-valued list of agent IDs connected to this agent via connected_agent tools.
