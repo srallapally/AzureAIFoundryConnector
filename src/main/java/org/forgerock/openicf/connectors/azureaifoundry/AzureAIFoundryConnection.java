@@ -1,3 +1,4 @@
+// src/main/java/org/forgerock/openicf/connectors/azureaifoundry/AzureAIFoundryConnection.java
 package org.forgerock.openicf.connectors.azureaifoundry;
 
 import org.forgerock.openicf.connectors.azureaifoundry.client.AzureAIFoundryClient;
@@ -54,8 +55,8 @@ public class AzureAIFoundryConnection implements Closeable {
         String subscriptionId = config.getSubscriptionId();
         String defaultLocation = config.getDefaultLocation();
         String agentServiceEndpoint = config.getAgentServiceEndpoint();
-        this.toolsInventoryUrl = configuration.getToolsInventoryUrl();
-        this.toolsInventoryFilePath = configuration.getToolsInventoryFilePath();
+        String toolsInventoryUrl = config.getToolsInventoryUrl();
+        String toolsInventoryFilePath = config.getToolsInventoryFilePath();
 
         if (config.isUseManagedIdentity()) {
             return new AzureAIFoundryClient(
