@@ -176,12 +176,6 @@ public class AzureAIFoundryConnector implements
         agentOc.addAttributeInfo(AttributeInfoBuilder.build(
                 AzureAIFoundryConstants.ATTR_RESPONSE_FORMAT,
                 String.class));
-        // Normalized list of tool IDs (aligned with Bedrock)
-        agentOc.addAttributeInfo(
-                AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_TOOLS)
-                        .setType(String.class)
-                        .setMultiValued(true)
-                        .build());
         // Raw Azure tools payload as JSON (single large string)
         agentOc.addAttributeInfo(
                 AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_TOOLS_RAW)
