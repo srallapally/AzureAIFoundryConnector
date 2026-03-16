@@ -524,26 +524,48 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
     }
 
     /**
-     * Get a single agent by id.
-     * <p>
-     * For now we implement this by listing and filtering, to avoid guessing
-     * the exact GET /agents/{id} shape. You can replace this with a direct
-     * GET call later.
+     * Get a single agent by id using default base path and API version.
      */
     public AzureAgentDescriptor getAgent(String agentId) {
         return getAgent(agentId, "/agents", API_VERSION);
     }
 
     /**
-     * Get an agent from the list result using an explicitly provided base path and api-version.
+     * Get a single agent by id via direct GET call.
      *
-     * This preserves the existing behavior (no per-agent GET call).
+     * @return the agent descriptor, or null if not found (HTTP 404)
+     * @throws RuntimeException on non-404 HTTP errors or I/O failure
      */
     public AzureAgentDescriptor getAgent(String agentId, String agentBasePath, String apiVersion) {
-        return listAgents(agentBasePath, apiVersion).stream()
-                .filter(a -> agentId.equals(a.getId()))
-                .findFirst()
-                .orElse(null);
+        if (agentId == null || agentId.isEmpty()) {
+            return null;
+        }
+
+        try {
+            String pathAndQuery = agentBasePath + "/" + urlEncode(agentId)
+                    + "?api-version=" + urlEncode(apiVersion);
+
+            HttpRequest request = baseRequestBuilder(pathAndQuery)
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 404) {
+                return null;
+            }
+
+            if (response.statusCode() / 100 != 2) {
+                throw new RuntimeException("getAgent failed: HTTP "
+                        + response.statusCode() + " body=" + response.body());
+            }
+
+            AgentListItem item = objectMapper.readValue(response.body(), AgentListItem.class);
+            return item != null ? item.toDescriptor() : null;
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException("Error fetching agent " + agentId, e);
+        }
     }
 
     /**
