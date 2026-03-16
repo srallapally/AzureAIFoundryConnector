@@ -1,3 +1,4 @@
+// src/main/java/org/forgerock/openicf/connectors/azureaifoundry/operations/AzureAIFoundryCrudService.java
 package org.forgerock.openicf.connectors.azureaifoundry.operations;
 
 import org.forgerock.openicf.connectors.azureaifoundry.AzureAIFoundryConnection;
@@ -61,7 +62,7 @@ public class AzureAIFoundryCrudService {
         List<AzureAgentDescriptor> agents =
                 client.listAgents(connection.getAgentBasePath(), connection.getApiVersion());
         for (AzureAgentDescriptor agent : agents) {
-            System.out.println(agent.toString());
+            LOG.ok("Processing agent: " + agent);
             ConnectorObject obj = toAgentConnectorObject(objectClass, agent);
             if (obj == null) {
                 continue;

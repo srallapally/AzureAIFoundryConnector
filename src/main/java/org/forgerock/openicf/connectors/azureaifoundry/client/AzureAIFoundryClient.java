@@ -2,6 +2,7 @@
 package org.forgerock.openicf.connectors.azureaifoundry.client;
 
 import org.forgerock.openicf.connectors.azureaifoundry.utils.TokenResponse;
+import org.identityconnectors.common.logging.Log;
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -24,6 +25,8 @@ import java.util.*;
  * Azure AI Foundry client used by the OpenICF connector.
  */
 public class AzureAIFoundryClient implements AutoCloseable, Closeable {
+
+    private static final Log LOG = Log.getLog(AzureAIFoundryClient.class);
 
     // ---------------------------------------------------------------------
     // Core context
@@ -363,7 +366,7 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
                         request, HttpResponse.BodyHandlers.ofString());
 
                 if (response.statusCode() / 100 != 2) {
-                    System.err.println("Graph agentIdentity list failed: HTTP "
+                    LOG.warn("Graph agentIdentity list failed: HTTP "
                             + response.statusCode() + " body=" + response.body());
                     agentIdentityByDisplayName = java.util.Collections.emptyMap();
                     return agentIdentityByDisplayName;
@@ -386,7 +389,7 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
                 url = (nextLink != null && !nextLink.isNull()) ? nextLink.asText() : null;
             }
         } catch (Exception e) {
-            System.err.println("Failed to load agent identity map from Graph: " + e.getMessage());
+            LOG.warn(e, "Failed to load agent identity map from Graph");
             agentIdentityByDisplayName = java.util.Collections.emptyMap();
             return agentIdentityByDisplayName;
         }
@@ -421,8 +424,8 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
             return null;
         }
         if (ids.size() > 1) {
-            System.err.println("Ambiguous Entra agent identity match for displayName='"
-                    + agentDisplayName + "': " + ids.size() + " matches found. Skipping.");
+            LOG.warn("Ambiguous Entra agent identity match for displayName=''{0}'': {1} matches found. Skipping.",
+                    agentDisplayName, ids.size());
             return null;
         }
 
@@ -467,10 +470,10 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
 
         String continuationToken = null;
         int pageSize = 50; // reasonable default
-        System.out.println("Listing agents with pageSize="+pageSize);
+        LOG.ok("Listing agents with pageSize={0}", pageSize);
         do {
             ListAgentsPage page = listAgentsPaginated(pageSize, continuationToken, agentBasePath, apiVersion);
-            System.out.println("Got page with "+page.getAgents().size()+" agents");
+            LOG.ok("Got page with {0} agents", page.getAgents().size());
             all.addAll(page.getAgents());
             continuationToken = page.getContinuationToken();
         } while (continuationToken != null);
@@ -706,8 +709,7 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
             cachedIdentityBindings = Collections.unmodifiableList(ibList);
 
         } catch (Exception e) {
-            System.err.println("Failed to load tools inventory: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error(e, "Failed to load tools inventory");
             cachedToolsById = Collections.emptyMap();
             cachedKnowledgeBases = Collections.emptyList();
             cachedGuardrails = Collections.emptyList();
