@@ -1,3 +1,4 @@
+// src/main/java/org/forgerock/openicf/connectors/azureaifoundry/AzureAIFoundryConnector.java
 package org.forgerock.openicf.connectors.azureaifoundry;
 
 import org.forgerock.openicf.connectors.azureaifoundry.operations.AzureAIFoundryCrudService;
@@ -10,8 +11,8 @@ import org.identityconnectors.framework.common.objects.filter.EqualsFilter;
 import org.identityconnectors.framework.common.objects.filter.Filter;
 import org.identityconnectors.framework.common.objects.filter.FilterTranslator;
 import org.identityconnectors.framework.spi.Configuration;
-import org.identityconnectors.framework.spi.Connector;
 import org.identityconnectors.framework.spi.ConnectorClass;
+import org.identityconnectors.framework.spi.PoolableConnector;
 import org.identityconnectors.framework.spi.SearchResultsHandler;
 import org.identityconnectors.framework.spi.operations.SchemaOp;
 import org.identityconnectors.framework.spi.operations.SearchOp;
@@ -32,7 +33,7 @@ import org.identityconnectors.framework.spi.operations.TestOp;
         displayNameKey = "azureaifoundry.connector.display"
 )
 public class AzureAIFoundryConnector implements
-        Connector,
+        PoolableConnector,
         SearchOp<Filter>,
         SchemaOp,
         TestOp,
@@ -80,6 +81,12 @@ public class AzureAIFoundryConnector implements
         }
         crudService = null;
         configuration = null;
+    }
+
+    @Override
+    public void checkAlive() {
+        // No-op: HttpClient and token cache are stateless across requests.
+        // Token refresh happens lazily on next API call.
     }
 
     @Override
@@ -360,19 +367,19 @@ public class AzureAIFoundryConnector implements
 
         // Permissions (multi-valued)
         ibOc.addAttributeInfo(AttributeInfoBuilder.define(AzureAIFoundryConstants.ATTR_PERMISSIONS)
-                        .setType(String.class)
-                        .setMultiValued(true)
-                        .build());
+                .setType(String.class)
+                .setMultiValued(true)
+                .build());
 
         // Scope attributes
         ibOc.addAttributeInfo(AttributeInfoBuilder.define("scope")
-                        .setType(String.class)
-                        .setMultiValued(false)
-                        .build());
+                .setType(String.class)
+                .setMultiValued(false)
+                .build());
         ibOc.addAttributeInfo(AttributeInfoBuilder.define("scopeResourceId")
-                        .setType(String.class)
-                        .setMultiValued(false)
-                        .build());
+                .setType(String.class)
+                .setMultiValued(false)
+                .build());
 
         builder.defineObjectClass(ibOc.build());
         Schema schema = builder.build();
@@ -395,7 +402,6 @@ public class AzureAIFoundryConnector implements
                              ResultsHandler handler,
                              OperationOptions options) {
         LOG.ok("executeQuery called for objectClass {0}, filter {1}", objectClass, filter);
-        System.out.println("executeQuery called for objectClass "+ objectClass +", filter "+ filter);
 
         if (crudService == null) {
             throw new IllegalStateException("CRUD service is not initialized.");
@@ -431,9 +437,7 @@ public class AzureAIFoundryConnector implements
         PagingResultsHandler pagingHandler = new PagingResultsHandler(handler, offset, pageSize);
 
         String ocName = objectClass.getObjectClassValue();
-        System.out.println("ocName: " + ocName);
-        if (ObjectClass.ALL.equals(objectClass) ||
-                objectClass.ACCOUNT_NAME.equals(ocName)) {
+        if (ObjectClass.ACCOUNT_NAME.equals(ocName)) {
             crudService.searchAgents(objectClass, filter, pagingHandler, options);
         } else if (AzureAIFoundryConstants.OC_GUARDRAIL.equals(ocName)) {
             crudService.searchGuardrails(objectClass, filter, pagingHandler, options);
@@ -462,7 +466,7 @@ public class AzureAIFoundryConnector implements
         ConnectorObject co = null;
         String ocName = objectClass.getObjectClassValue();
 
-        if (objectClass.ACCOUNT_NAME.equals(ocName)) {
+        if (ObjectClass.ACCOUNT_NAME.equals(ocName)) {
             co = crudService.getAgent(objectClass, uid, options);
         } else if (AzureAIFoundryConstants.OC_GUARDRAIL.equals(ocName)) {
             co = crudService.getGuardrail(objectClass, uid, options);
