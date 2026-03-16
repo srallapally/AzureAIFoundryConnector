@@ -849,11 +849,12 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
             return cachedAgentRelations;
         }
     }
-
-
     /**
      * Parse a tool node from the JSON inventory.
-     * Tools no longer require agentId - the relationship is tracked separately.
+     * Handles multiple tool types with different nested structures:
+     * - file_search/code_interpreter: minimal fields
+     * - openapi: name/description in definition.openapi
+     * - connected_agent: name/description in definition.connected_agent
      */
     private void parseToolNode(com.fasterxml.jackson.databind.JsonNode node,
                                Map<String, AzureToolDescriptor> out) {
@@ -862,15 +863,63 @@ public class AzureAIFoundryClient implements AutoCloseable, Closeable {
             return;
         }
 
-        String name = optText(node, "name");
         String type = optText(node, "type");
-        String description = optText(node, "description");
-        String endpoint = optText(node, "endpoint");
-        String definition = optText(node, "definition");
+
+        // Extract name, description, endpoint based on tool type
+        String name = null;
+        String description = null;
+        String endpoint = null;
+        String definition = null;
+
+        // Check if we have a definition node
+        com.fasterxml.jackson.databind.JsonNode defNode = node.get("definition");
+
+        if (defNode != null && !defNode.isNull()) {
+            // Serialize the entire definition as a JSON string
+            try {
+                definition = objectMapper.writeValueAsString(defNode);
+            } catch (Exception e) {
+                // Fallback to toString if serialization fails
+                definition = defNode.toString();
+            }
+
+            // Extract type-specific fields from nested definition
+            if ("openapi".equals(type) && defNode.has("openapi")) {
+                com.fasterxml.jackson.databind.JsonNode openapiNode = defNode.get("openapi");
+                name = optText(openapiNode, "name");
+                description = optText(openapiNode, "description");
+
+                // Extract server URL as endpoint if available
+                if (openapiNode.has("spec")) {
+                    com.fasterxml.jackson.databind.JsonNode specNode = openapiNode.get("spec");
+                    if (specNode.has("servers") && specNode.get("servers").isArray()
+                            && specNode.get("servers").size() > 0) {
+                        com.fasterxml.jackson.databind.JsonNode firstServer = specNode.get("servers").get(0);
+                        endpoint = optText(firstServer, "url");
+                    }
+                }
+            } else if ("connected_agent".equals(type) && defNode.has("connected_agent")) {
+                com.fasterxml.jackson.databind.JsonNode connectedAgentNode = defNode.get("connected_agent");
+                name = optText(connectedAgentNode, "name");
+                description = optText(connectedAgentNode, "description");
+                // For connected agents, the agent ID could serve as an endpoint reference
+                String connectedAgentId = optText(connectedAgentNode, "id");
+                if (connectedAgentId != null) {
+                    endpoint = "agent://" + connectedAgentId;
+                }
+            }
+            // For file_search, code_interpreter: leave name/description/endpoint as null
+            // They only have type and minimal definition
+        }
+
+        // Fallback: use id as name if name is still null
+        if (name == null || name.isEmpty()) {
+            name = id;
+        }
 
         AzureToolDescriptor tool = new AzureToolDescriptor(
                 id,
-                (name != null && !name.isEmpty()) ? name : id,
+                name,
                 type,
                 description,
                 endpoint,
